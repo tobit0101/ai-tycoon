@@ -1,0 +1,12 @@
+{
+    "asset": "38439338657d04aedb71317dafb5fac8",
+    "fileName": "019f9607-6685-7430-8493-6963884d2ece_Preview.jpg",
+    "prompt": "stylized cobblestone pavement floor, seamless texture, tileable, city street stones, medieval toon road, vibrant colors, clean lighting, hand-painted style",
+    "negativePrompt": "",
+    "model": "hand-painted-textures-2-0",
+    "modelName": "Hand Painted Textures 2.0",
+    "customSeed": 952905062,
+    "w3CTraceId": "",
+    "feedback": 0,
+    "refinementMode": "Generation"
+}
