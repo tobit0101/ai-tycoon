@@ -1,12 +1,12 @@
 fileFormatVersion: 2
-guid: fcf7219bab7fe46a1ad266029b2fee19
-timeCreated: 1484669930
+guid: 476cc7d7cd9874016adc216baab94a0a
+timeCreated: 1484146680
 licenseType: Store
 MonoImporter:
   serializedVersion: 2
   defaultReferences: []
   executionOrder: 0
-  icon: {fileID: 2800000, guid: a186f8a87ca4f4d3aa864638ad5dfb65, type: 3}
+  icon: {instanceID: 0}
   userData: 
   assetBundleName: 
   assetBundleVariant: 
@@ -15,5 +15,5 @@ AssetOrigin:
   productId: 201897
   packageName: Mini Toon | Office Scene
   packageVersion: 1.0
-  assetPath: Assets/TutorialInfo/Scripts/Readme.cs
+  assetPath: Assets/Mini Toon Office/Readme/Scripts/Editor/ReadmeEditor.cs
   uploadId: 449881
