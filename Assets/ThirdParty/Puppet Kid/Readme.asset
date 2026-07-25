@@ -17,40 +17,57 @@ MonoBehaviour:
   title: Puppet Kid
   sections:
   - heading: About
-    text: "Thank you for downloading the Puppet Kid asset.  This demo base character is intended to you to test and see if it fit your needs before you buy the other characters or packs derived from this basemesh."
+    text: Thank you for downloading the Puppet Kid asset.  This demo base character
+      is intended to you to test and see if it fit your needs before you buy the
+      other characters or packs derived from this basemesh.
     linkText: 
     url: 
-  - heading: ✓ Optimization
-    text:  "This character is extremely light and can be used in both pc and mobile games. All models share a single texture file, allowing you to customize the colors according to your needs just by duplicanting materials and adjusting the material offset. \n\n⚠*Many models have primary, secondary and even tertiary material slots, check the <Materials> option in the [ Inspector > Skinned Mesh Renderer ] to add secondary materials and customize colors to fit your needs."
+  - heading: "\u2713 Optimization"
+    text: "This character is extremely light and can be used in both pc and mobile
+      games. All models share a single texture file, allowing you to customize the
+      colors according to your needs just by duplicanting materials and adjusting
+      the material offset. \n\n\u26A0*Many models have primary, secondary and even
+      tertiary material slots, check the <Materials> option in the [ Inspector >
+      Skinned Mesh Renderer ] to add secondary materials and customize colors to
+      fit your needs."
     linkText: 
     url: 
-  - heading: ✓ Textures
-    text: "Diffuse/Albedo:\n-256px (.png)"
+  - heading: "\u2713 Textures"
+    text: 'Diffuse/Albedo:
+
+      -256px (.png)'
     linkText: 
     url: 
-  - heading: ✓ PolyCount
-    text: "4.6k Tris"
+  - heading: "\u2713 PolyCount"
+    text: 4.6k Tris
     linkText: 
     url: 
-  - heading:  ✓ Blendshapes
-    text:  "Eyebrows:\n-Up\n-Down\n-Angry\n-Sad\n\nMouth:\n-Neutral\n-Sad\n-Curious\n\n⚠*Make sure that the option <Blend Shape Normals> to <Import> in [ Inspector > Import Settings > Model Tab ] to avoid artifacts when using the blendshapes"
-    linkText:
-    url:
-  - heading: ✓ Animations
-    text:  "-Idle\n-Walk\n-Run\n-Jump\n\n*All models have Humanoid rigs (Rigged/Skinned and Mecanim ready)\n\n*Remember to adjust <Muscle & Settings> in the model´s [Rig > Configure] to adjust overlapping and clipping depending of your source animations."
-    linkText:
-    url:
-  - heading: ✓ Modular Design
-    text:  "This character is designed to be modular, making it easy to create a variety of combinations, allowing you to create unique characters and scenes."
-    linkText:
-    url:
-  - heading:
-    text:  "Each asset has been carefully crafted to add a unique touch to your game project!"
-    linkText:
-    url:
-  - heading: ☎ Contact/Support
+  - heading: "\u2713 Blendshapes"
+    text: "Eyebrows:\n-Up\n-Down\n-Angry\n-Sad\n\nMouth:\n-Neutral\n-Sad\n-Curious\n\n\u26A0*Make
+      sure that the option <Blend Shape Normals> to <Import> in [ Inspector > Import
+      Settings > Model Tab ] to avoid artifacts when using the blendshapes"
+    linkText: 
+    url: 
+  - heading: "\u2713 Animations"
+    text: "-Idle\n-Walk\n-Run\n-Jump\n\n*All models have Humanoid rigs (Rigged/Skinned
+      and Mecanim ready)\n\n*Remember to adjust <Muscle & Settings> in the model\xB4s
+      [Rig > Configure] to adjust overlapping and clipping depending of your source
+      animations."
+    linkText: 
+    url: 
+  - heading: "\u2713 Modular Design"
+    text: This character is designed to be modular, making it easy to create a variety
+      of combinations, allowing you to create unique characters and scenes.
+    linkText: 
+    url: 
+  - heading: 
+    text: Each asset has been carefully crafted to add a unique touch to your game
+      project!
+    linkText: 
+    url: 
+  - heading: "\u260E Contact/Support"
     text: 
-    linkText: Asset Store Profile 
+    linkText: Asset Store Profile
     url: https://assetstore.unity.com/publishers/20594
   - heading: 
     text: 
