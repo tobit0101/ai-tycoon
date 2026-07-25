@@ -16,7 +16,6 @@ public class RTSCameraController : MonoBehaviour
     [SerializeField] private float panSmoothing = 12f;
 
     [Header("Right-click drag")]
-    [SerializeField] private float dragSmoothing = 20f;
     [SerializeField] private float groundHeight = 0f;
 
     [Header("Rotation (Q/E)")]
