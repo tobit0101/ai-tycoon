@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 53848a41e6fc34393aa61d9326562d1e, type: 3}
+  m_Name: Ollama_Config
+  m_EditorClassIdentifier: Assembly-CSharp::AITycoon.Features.LLM_API.LLMConfig
+  apiUrl: http://localhost:11434/v1/chat/completions
+  apiKey: DEIN_API_KEY
+  modelName: ministral-3:3b-instruct-2512-fp16
+  delayBetweenRequests: 0.5
