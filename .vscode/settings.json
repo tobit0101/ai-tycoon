@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "AI Tycoon.slnx"
+    "dotnet.defaultSolution": "ai-tycoon.slnx"
 }
