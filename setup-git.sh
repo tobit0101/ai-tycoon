@@ -39,10 +39,21 @@ if [ ! -f "$UNITY_MERGE" ]; then
     echo "   Pfad: <Unity-Installation>/Helpers/UnityYAMLMerge"
 else
     echo "✅ UnityYAMLMerge gefunden: $UNITY_MERGE"
+
+    # mergetool: für interaktives `git mergetool`
     git config --local merge.tool unityyamlmerge
     git config --local mergetool.unityyamlmerge.trustExitCode false
     git config --local "mergetool.unityyamlmerge.cmd" "$UNITY_MERGE merge -p \"\$BASE\" \"\$REMOTE\" \"\$LOCAL\" \"\$MERGED\""
-    echo "✅ UnityYAMLMerge konfiguriert"
+
+    # merge driver: benötigt von der `merge=unityyamlmerge` Regel in .gitattributes.
+    # Unterschied zu merge.tool oben:
+    #   merge.tool           -> interaktives `git mergetool` (Konflikt manuell lösen)
+    #   merge.<name>.driver  -> Attribut-basierter Automerge, den .gitattributes referenziert.
+    # Without the .driver entry, Git ignoriert die `merge=unityyamlmerge`-Regel
+    # bei Prefab/Szene-Konflikten und führt sie als simplen Text-Merge aus -> kaputte YAML.
+    git config --local "merge.unityyamlmerge.driver" "$UNITY_MERGE merge -p %O %A %B %L"
+
+    echo "✅ UnityYAMLMerge konfiguriert (mergetool + merge driver)"
 fi
 
 # 3. Zeilenumbrüche (OS-spezifisch)
