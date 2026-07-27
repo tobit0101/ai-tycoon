@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: f2e94c9cff5584c1fadcd572b33de180
-DefaultImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 201897
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 1.0
   assetPath: Assets/Mini Toon Office/Scenes/Toon Office sample Scene.unity
   uploadId: 449881
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

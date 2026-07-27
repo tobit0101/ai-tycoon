@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: 5594e4a054e557e409fb17086ef6d8c1
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 386694
@@ -13,3 +8,8 @@ AssetOrigin:
   assetPath: Assets/Level13/Low Poly Interior Flower Pots/URP/Prefab/Plant & pots/Pot1
     & Cactus.prefab
   uploadId: 934650
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

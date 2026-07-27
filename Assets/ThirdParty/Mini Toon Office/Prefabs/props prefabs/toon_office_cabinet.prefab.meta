@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: 436d6c6ad13444243927518c3405f6ea
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 201897
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 1.0
   assetPath: Assets/Mini Toon Office/Prefabs/props prefabs/toon_office_cabinet.prefab
   uploadId: 449881
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

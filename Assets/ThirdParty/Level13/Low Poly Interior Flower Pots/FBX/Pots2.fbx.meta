@@ -1,7 +1,14 @@
 fileFormatVersion: 2
 guid: fd389535e70669541b199d0739543873
+AssetOrigin:
+  serializedVersion: 1
+  productId: 386694
+  packageName: Low Poly Interior Flower Pots
+  packageVersion: 1.0
+  assetPath: Assets/Level13/Low Poly Interior Flower Pots/FBX/Pots2.fbx
+  uploadId: 934650
 ModelImporter:
-  serializedVersion: 24200
+  serializedVersion: 24501
   internalIDToNameTable: []
   externalObjects: {}
   materials:
@@ -9,6 +16,7 @@ ModelImporter:
     materialName: 0
     materialSearch: 1
     materialLocation: 1
+    searchTexturesGlobally: 1
   animations:
     legacyGenerateAnimations: 4
     bakeSimulation: 0
@@ -59,6 +67,8 @@ ModelImporter:
     generateMeshLods: 0
     meshLodGenerationFlags: 0
     maximumMeshLod: -1
+    importUVs: -1
+    importVertexColors: 1
     meshOptimizationFlags: -1
     indexFormat: 0
     secondaryUVAngleDistortion: 8
@@ -78,6 +88,7 @@ ModelImporter:
     legacyComputeAllNormalsFromSmoothingGroupsWhenMeshHasBlendShapes: 0
     blendShapeNormalImportMode: 1
     normalSmoothingSource: 0
+    calculateBlendshapeNormalsDeltaFromImportedNormals: 1
   referencedClips: []
   importAnimation: 1
   humanDescription:
@@ -108,10 +119,3 @@ ModelImporter:
   userData: 
   assetBundleName: 
   assetBundleVariant: 
-AssetOrigin:
-  serializedVersion: 1
-  productId: 386694
-  packageName: Low Poly Interior Flower Pots
-  packageVersion: 1.0
-  assetPath: Assets/Level13/Low Poly Interior Flower Pots/FBX/Pots2.fbx
-  uploadId: 934650

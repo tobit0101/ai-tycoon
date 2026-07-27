@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: 57addd97d1055424daebeb70d461be6d
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 258600
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 2.0.0
   assetPath: Assets/nappin/OfficeEssentialsPack/Prefabs/(Prb)BookPile6.prefab
   uploadId: 799958
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: ed097709fffbe46488ab5df91f69939c
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 258600
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 2.0.0
   assetPath: Assets/nappin/OfficeEssentialsPack/Prefabs/(Prb)KitchenModule.prefab
   uploadId: 799958
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

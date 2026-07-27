@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: f54a5e87d7ba44da197be2fd1f287240
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 201897
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 1.0
   assetPath: Assets/Mini Toon Office/Prefabs/tiles prefabs/toon_office_tile_ground_small.prefab
   uploadId: 449881
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

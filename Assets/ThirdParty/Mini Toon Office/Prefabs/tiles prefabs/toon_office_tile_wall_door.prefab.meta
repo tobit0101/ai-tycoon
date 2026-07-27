@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: 11d13692dbe8044e288f982c19e7428a
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 201897
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 1.0
   assetPath: Assets/Mini Toon Office/Prefabs/tiles prefabs/toon_office_tile_wall_door.prefab
   uploadId: 449881
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

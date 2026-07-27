@@ -1,10 +1,5 @@
 fileFormatVersion: 2
 guid: 3172b651e3aa6fe4ea15f809c861bbbe
-PrefabImporter:
-  externalObjects: {}
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 386694
@@ -12,3 +7,8 @@ AssetOrigin:
   packageVersion: 1.0
   assetPath: Assets/Level13/Low Poly Interior Flower Pots/URP/Prefab/Pots/Type2/Pot7.prefab
   uploadId: 934650
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

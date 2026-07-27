@@ -1,11 +1,5 @@
 fileFormatVersion: 2
 guid: 55b99b9df25c2e94eb6fd8c7ce5ccca7
-NativeFormatImporter:
-  externalObjects: {}
-  mainObjectFileID: 2100000
-  userData: 
-  assetBundleName: 
-  assetBundleVariant: 
 AssetOrigin:
   serializedVersion: 1
   productId: 386694
@@ -14,3 +8,9 @@ AssetOrigin:
   assetPath: Assets/Level13/Low Poly Interior Flower Pots/URP/Material/Flower Pot
     Material.mat
   uploadId: 934650
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
