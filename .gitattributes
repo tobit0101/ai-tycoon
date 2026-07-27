@@ -167,5 +167,13 @@ Packages/packages-lock.json linguist-generated
 # Spine export file for Unity
 *.skel.bytes            lfs
 
-# Exceptions for .asset files such as lightning pre-baking
-LightingData.asset     binary
+# Exceptions for .asset files that Unity ALWAYS stores as binary,
+# even with "Force Text" serialization enabled. These must use LFS / -text
+# (NOT the general *.asset -> unity-yaml text rule above), otherwise
+# CRLF->LF normalization corrupts them on renormalize/checkout.
+# Reference: Unity stores terrains and navmeshes as binary by design.
+# Unity names baked assets as "<Prefix>-<Name>.asset" (e.g. "NavMesh-CityGround.asset"),
+# so we match the prefix form rather than the suffix form.
+[Tt]errain-*.asset       lfs
+[Nn]av[Mm]esh-*.asset    lfs
+LightingData.asset       lfs
