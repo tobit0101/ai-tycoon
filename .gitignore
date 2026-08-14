@@ -112,3 +112,7 @@ InitTestScene*.unity*
 
 # Superpowers brainstorming session files
 .superpowers/
+
+# Unity-Wiederherstellungsdateien nach einem Absturz. Binaer serialisierte Szenen,
+# die Unity neben dem Projekt ablegt - reine Arbeitsstaende, kein Projektinhalt.
+*.backup
