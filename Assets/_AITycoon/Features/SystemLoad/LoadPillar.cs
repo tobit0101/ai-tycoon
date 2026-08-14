@@ -55,9 +55,12 @@ namespace AITycoon.Features.SystemLoad
         [SerializeField] private float leverBlowoutAngle = -135f;
 
         [Header("Blowout-Choreografie")]
-        [Tooltip("Kippwinkel der Bank um lokal X — gleiche Achse und gleiches Vorzeichen wie " +
-                 "der Haupthebel: negativ = nach vorne-unten.")]
-        [SerializeField] private float bankBlowoutAngle = -55f;
+        [Tooltip("Kippwinkel der Bank um lokal X: POSITIV = nach vorne-unten (visuell " +
+                 "verifiziert). Bewusst entgegengesetztes Vorzeichen zum Haupthebel (-135): " +
+                 "die Bank ist ein Empty, und Unitys FBX-Import gibt Null-Knoten eine " +
+                 "kompensierende Rotation statt gespiegelter Geometrie — ihre lokale X-Achse " +
+                 "zeigt dadurch andersherum als die der Mesh-Kinder.")]
+        [SerializeField] private float bankBlowoutAngle = 55f;
         [Tooltip("Sekunden, die die Bank dem Haupthebel hinterherschnappt — liest sich als " +
                  "Kraftuebertragung ueber die Schubstange.")]
         [SerializeField] private float bankFollowDelay = 0.07f;
@@ -384,13 +387,14 @@ namespace AITycoon.Features.SystemLoad
         /// </summary>
         private IEnumerator SlamPhase()
         {
-            // Achsenlage: Die Kinder behalten ihre lokalen Blender-Achsen (der Instanz-Root
-            // kompensiert mit -90/180, siehe OfficeLayoutBuilder). Der FBX-Import spiegelt die
-            // X-ACHSE — dadurch behalten X-Rotationen ihr Blender-Vorzeichen (Hebel/Bank:
-            // negativ = nach vorne-unten, visuell verifiziert), waehrend Y- und Z-Rotationen
-            // das Vorzeichen drehen (Tuer: Blender -75 offen -> Unity +75).
-            // Hebel UND Bank kippen um lokal X nach vorne-unten aus der Wand (Messerschalter-
-            // Bewegung, Design seit ASSET_VERSION 3) — dieselbe Achse, dasselbe Vorzeichen.
+            // Achsenlage — alle drei Vorzeichen sind im Play Mode VERIFIZIERT, nicht hergeleitet:
+            //   Hebel (Mesh)  -135 um lokal X = nach vorne-unten (+135 kippte in den Kasten),
+            //   Bank  (Empty)  +55 um lokal X = nach vorne-unten,
+            //   Tuer  (Mesh)   +75 um lokal Z = auf.
+            // Dass Hebel und Bank um dieselbe Achse kippen und trotzdem entgegengesetzte
+            // Vorzeichen brauchen, kommt vom FBX-Import: Meshes werden gespiegelt (X-Achse),
+            // Null-Knoten wie Breaker_Bank bekommen stattdessen eine kompensierende Rotation —
+            // ihre lokale X-Achse zeigt dadurch andersherum. Nicht "vereinheitlichen".
             Quaternion leverFrom = breakerLever != null ? breakerLever.localRotation : Quaternion.identity;
             Quaternion bankFrom = breakerBank != null ? breakerBank.localRotation : Quaternion.identity;
             Quaternion leverTo = Quaternion.Euler(leverBlowoutAngle, 0f, 0f);
