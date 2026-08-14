@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 
@@ -211,6 +212,8 @@ namespace AITycoon.Features.SystemLoad.EditorTools
             EditorGUILayout.Space(6f);
             DrawBlowoutSection();
             EditorGUILayout.Space(6f);
+            DrawCapacitySection();
+            EditorGUILayout.Space(6f);
             DrawReadout(monitor);
         }
 
@@ -331,6 +334,74 @@ namespace AITycoon.Features.SystemLoad.EditorTools
 
             if (pillar == null)
                 EditorGUILayout.HelpBox("Keine LoadPillar in der Szene.", MessageType.None);
+        }
+
+        /// <summary>
+        /// Blendet Modul/Kipphebel-Paare der Sicherungsbank ein und aus — die Vorschau auf das
+        /// Elektriker-Ausbau-Event (Konzept §2.3): belegte Felder = gebaute Denklast-Kapazitaet.
+        /// Reine Testansicht im Play Mode; die echte Ausbau-Logik lebt spaeter im Gameplay-Code
+        /// und dieses Fenster liest die Paare nur ueber die Vertragsnamen aus der FBX-Hierarchie.
+        /// </summary>
+        private void DrawCapacitySection()
+        {
+            EditorGUILayout.LabelField("Ausbau (Sicherungsbank)", EditorStyles.boldLabel);
+
+            LoadPillar pillar = ReadPillar().Pillar;
+            if (pillar == null)
+            {
+                EditorGUILayout.HelpBox("Keine LoadPillar in der Szene.", MessageType.None);
+                return;
+            }
+
+            List<(GameObject module, GameObject toggle)> pairs = FindModulePairs(pillar.transform);
+            if (pairs.Count == 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Keine Breaker_Mod_XX am Sicherungskasten gefunden — FBX-Stand vor "
+                    + "ASSET_VERSION 3?", MessageType.None);
+                return;
+            }
+
+            int active = 0;
+            foreach ((GameObject module, GameObject _) in pairs)
+            {
+                if (module.activeSelf)
+                    active++;
+            }
+
+            // Mindestens 1: ein Sicherungskasten ohne einzige Sicherung erzaehlt nichts.
+            int wanted = EditorGUILayout.IntSlider("Belegte Felder", active, 1, pairs.Count);
+            if (wanted == active)
+                return;
+
+            for (int i = 0; i < pairs.Count; i++)
+            {
+                bool on = i < wanted;
+                pairs[i].module.SetActive(on);
+                if (pairs[i].toggle != null)
+                    pairs[i].toggle.SetActive(on);
+            }
+        }
+
+        /// <summary>
+        /// Modul/Kipphebel-Paare der Sicherungsbank, ueber die Vertragsnamen gesammelt
+        /// (Breaker_Mod_XX direkt unter der Instanz, Breaker_Tog_XX unter Breaker_Bank).
+        /// Transform.Find findet auch deaktivierte Kinder — bereits ausgeblendete Module
+        /// verschwinden also nicht aus der Zaehlung.
+        /// </summary>
+        private static List<(GameObject module, GameObject toggle)> FindModulePairs(Transform root)
+        {
+            var pairs = new List<(GameObject, GameObject)>();
+            for (int i = 0; ; i++)
+            {
+                Transform module = root.Find($"Breaker_Mod_{i:D2}");
+                if (module == null)
+                    break;
+
+                Transform toggle = root.Find($"Breaker_Bank/Breaker_Tog_{i:D2}");
+                pairs.Add((module.gameObject, toggle != null ? toggle.gameObject : null));
+            }
+            return pairs;
         }
 
         private void DrawReadout(SystemLoadMonitor monitor)
