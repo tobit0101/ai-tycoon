@@ -48,18 +48,18 @@ namespace AITycoon.Features.SystemLoad
         [SerializeField] private float criticalThreshold = 0.85f;
 
         [Header("Lever")]
-        [Tooltip("Kippwinkel um die lokale X-Achse: NEGATIV kippt den Hebel wie einen " +
-                 "Messerschalter nach vorne-unten aus der Wand (visuell verifiziert; +135 " +
-                 "kippte ihn in den Kasten). X-Rotationen behalten das Blender-Vorzeichen, " +
-                 "weil der FBX-Import die X-Achse spiegelt.")]
-        [SerializeField] private float leverBlowoutAngle = -135f;
+        [Tooltip("Kippwinkel um die lokale X-Achse: POSITIV kippt den Hebel wie einen " +
+                 "Messerschalter nach vorne-unten aus der Wand. Gilt fuer den Prefab-Stand " +
+                 "aus der FuseBoxPrefabFactory, deren Achskompensation (-90/180) auf dem " +
+                 "Root sitzt — das Vorzeichen haengt an dieser Kompensation, nicht am Mesh.")]
+        [SerializeField] private float leverBlowoutAngle = 135f;
 
         [Header("Blowout-Choreografie")]
         [Tooltip("Kippwinkel der Bank um lokal X: POSITIV = nach vorne-unten (visuell " +
-                 "verifiziert). Bewusst entgegengesetztes Vorzeichen zum Haupthebel (-135): " +
-                 "die Bank ist ein Empty, und Unitys FBX-Import gibt Null-Knoten eine " +
-                 "kompensierende Rotation statt gespiegelter Geometrie — ihre lokale X-Achse " +
-                 "zeigt dadurch andersherum als die der Mesh-Kinder.")]
+                 "verifiziert) — gleiche Kipprichtung wie der Haupthebel. Die Bank ist ein " +
+                 "Empty, und Unitys FBX-Import gibt Null-Knoten eine kompensierende Rotation " +
+                 "statt gespiegelter Geometrie; ihr Winkel faellt deshalb flacher aus als der " +
+                 "des Hebels, obwohl beide dieselbe Bewegung beschreiben.")]
         [SerializeField] private float bankBlowoutAngle = 55f;
         [Tooltip("Sekunden, die die Bank dem Haupthebel hinterherschnappt — liest sich als " +
                  "Kraftuebertragung ueber die Schubstange.")]
@@ -406,14 +406,14 @@ namespace AITycoon.Features.SystemLoad
         /// </summary>
         private IEnumerator SlamPhase()
         {
-            // Achsenlage — alle drei Vorzeichen sind im Play Mode VERIFIZIERT, nicht hergeleitet:
-            //   Hebel (Mesh)  -135 um lokal X = nach vorne-unten (+135 kippte in den Kasten),
+            // Achsenlage — die Vorzeichen sind am Prefab-Stand ermittelt, nicht hergeleitet:
+            //   Hebel (Mesh)  +135 um lokal X = nach vorne-unten,
             //   Bank  (Empty)  +55 um lokal X = nach vorne-unten,
             //   Tuer  (Mesh)   +75 um lokal Z = auf.
-            // Dass Hebel und Bank um dieselbe Achse kippen und trotzdem entgegengesetzte
-            // Vorzeichen brauchen, kommt vom FBX-Import: Meshes werden gespiegelt (X-Achse),
-            // Null-Knoten wie Breaker_Bank bekommen stattdessen eine kompensierende Rotation —
-            // ihre lokale X-Achse zeigt dadurch andersherum. Nicht "vereinheitlichen".
+            // Die Betraege bleiben unterschiedlich, obwohl Hebel und Bank dieselbe Bewegung
+            // beschreiben: der FBX-Import behandelt Meshes und Null-Knoten unterschiedlich
+            // (Spiegelung vs. kompensierende Rotation), und die Achskompensation des Prefabs
+            // sitzt auf dem Root. Nicht "vereinheitlichen" ohne Play-Mode-Gegenprobe.
             Quaternion leverFrom = breakerLever != null ? breakerLever.localRotation : Quaternion.identity;
             Quaternion bankFrom = breakerBank != null ? breakerBank.localRotation : Quaternion.identity;
             Quaternion leverTo = Quaternion.Euler(leverBlowoutAngle, 0f, 0f);
