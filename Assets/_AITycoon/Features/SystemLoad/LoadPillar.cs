@@ -48,8 +48,11 @@ namespace AITycoon.Features.SystemLoad
         [SerializeField] private float criticalThreshold = 0.85f;
 
         [Header("Lever")]
-        [Tooltip("Kippwinkel um die lokale Y-Achse, wenn die Sicherung fliegt. Negativ = nach unten rechts.")]
-        [SerializeField] private float leverBlowoutAngle = -135f;
+        [Tooltip("Kippwinkel um die lokale X-Achse: der Hebel kippt wie ein Messerschalter nach " +
+                 "VORNE-UNTEN aus der Wand — gleiche Achse, Richtung und Vorzeichen wie die " +
+                 "Bank-Kipphebel. Kippt er ruecklings in die Wand, Vorzeichen drehen (dann auch " +
+                 "bei der Bank).")]
+        [SerializeField] private float leverBlowoutAngle = 135f;
         [Tooltip("Sekunden, bis die Reset-Sequenz beginnt.")]
         [SerializeField] private float leverResetDelay = 4f;
 
@@ -357,19 +360,15 @@ namespace AITycoon.Features.SystemLoad
         /// </summary>
         private IEnumerator SlamPhase()
         {
-            // Achse am Mesh vermessen, nicht aus der FBX-Konvertierung hergeleitet: die
-            // erwartete Umrechnung Blender (x, y, z) -> Unity (x, z, -y) findet bei FuseBox.fbx
-            // gar nicht statt, weil dessen Header bereits Unitys Achsen meldet (UpAxis = Y).
-            // Die lokalen Mesh-Bounds von Breaker_Lever sind (0.17, 0.08, 0.23) mit Ausdehnung
-            // entlang +Z: die lange Achse des Hebels IST lokal Z, die duenne Achse ist lokal Y.
-            // Gekippt wird also um lokal Y — eine Drehung um lokal Z wuerde den Hebel nur um
-            // seinen eigenen Schaft verdrehen und waere praktisch unsichtbar.
-            // Vorzeichen visuell verifiziert: negativ kippt nach unten rechts, ueber die
-            // Klappe; positiv nach unten links, wo der Hebel das gelbe Warnschild verdeckt.
-            // Fuer die Bank gilt dieselbe Regel: Blender-X bleibt lokal X, Vorzeichen gespiegelt.
+            // Achsenlage: Bei FuseBox.fbx findet keine Achskonvertierung statt — die Kinder
+            // behalten ihre lokalen Blender-Achsen (der Instanz-Root kompensiert mit -90/180,
+            // siehe OfficeLayoutBuilder), nur Drehvorzeichen koennen spiegeln.
+            // Hebel UND Bank kippen um lokal X nach vorne-unten aus der Wand (Messerschalter-
+            // Bewegung, Design seit ASSET_VERSION 3) — bewusst dieselbe Achse und dasselbe
+            // Vorzeichen: kippt eines ruecklings in die Wand, beide Winkel im Inspector negieren.
             Quaternion leverFrom = breakerLever != null ? breakerLever.localRotation : Quaternion.identity;
             Quaternion bankFrom = breakerBank != null ? breakerBank.localRotation : Quaternion.identity;
-            Quaternion leverTo = Quaternion.Euler(0f, leverBlowoutAngle, 0f);
+            Quaternion leverTo = Quaternion.Euler(leverBlowoutAngle, 0f, 0f);
             Quaternion bankTo = Quaternion.Euler(bankBlowoutAngle, 0f, 0f);
 
             // Untergrenze gegen Division durch 0, falls die Dauer im Inspector auf 0 steht.

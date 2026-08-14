@@ -58,9 +58,9 @@ Rot zeigt Unity im Fehlerfall per MaterialPropertyBlock-Tint.
 In Blender zeigt die Front nach **−Y**, oben ist **+Z**. **In Unity vermessen** (Kommentar in
 `LoadPillar.SlamPhase()`): Bei FuseBox.fbx findet keine Achskonvertierung statt — die Kinder
 behalten ihre lokalen Blender-Achsen (der Instanz-Root kompensiert mit −90°/180°), nur das
-Drehvorzeichen spiegelt. Also: Hebel = **lokal Y** (vermessen), Bank = **lokal X**, Tür =
-**lokal Z** (beide nach derselben Regel abgeleitet — Vorzeichen beim ersten Play-Mode-Test
-verifizieren).
+Drehvorzeichen spiegelt. Also: Hebel = **lokal X** (kippt nach vorne-unten, gleiche Achse und
+Richtung wie die Bank), Bank = **lokal X**, Tür = **lokal Z** — Vorzeichen beim ersten
+Play-Mode-Test verifizieren; Hebel und Bank teilen dasselbe Vorzeichen.
 
 ### Stil-Regeln (nicht verhandelbar)
 
@@ -172,7 +172,7 @@ zeigt in Blender `F.preview_load(0.58)`.
 
 | Teil | Ursprung | Achse (Blender) | Achse (Unity) | Ruhe | Ausschlag |
 |---|---|---|---|---|---|
-| `Breaker_Lever` | Drehpunkt der Schaltertafel | Y | lokal Y (Vorzeichen gespiegelt) | 0° (senkrecht = EIN) | 135° (geflogen) |
+| `Breaker_Lever` | Drehpunkt der Schaltertafel | X (kippt nach vorne-unten) | lokal X (Vorzeichen wie Bank) | 0° (senkrecht = EIN) | 135° (geflogen) |
 | `Breaker_Bank` | Kippachse der DIN-Schiene | X | lokal X (Vorzeichen gespiegelt) | 0° (alle EIN) | −55° (alle geflogen) |
 | `Box_Door` | linke Scharnierkante | Z | lokal Z (Vorzeichen gespiegelt) | 0° (zu) | ca. −75° (offen) |
 

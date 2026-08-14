@@ -68,13 +68,20 @@ CONFIG = {
     "niche_back": dict(x0=-0.44, x1=0.02, y0=-0.152, y1=-0.140, z0=0.76, z1=1.14),
     # Schaltertafel unterhalb des Fensters, auf der Kastenfront
     "lev_plate": dict(x0=-0.45, x1=0.03, y0=-0.340, y1=-0.320, z0=0.320, z1=0.690),
-    # Drehpunkt des Riesenhebels (Rotation um die Y-Achse = flach vor der Front)
+    # Drehpunkt des Riesenhebels. Rotation um die X-Achse: der Hebel kippt wie
+    # ein Messerschalter NACH VORNE-UNTEN aus der Wand — dieselbe Achse und
+    # Richtung wie die Bank-Kipphebel in der Nische. (Bis ASSET_VERSION 3 war
+    # es ein seitlicher Schwenk um Y; physisch liest sich der Vorwaertskipp
+    # richtig, und er kollidiert mit nichts: Tafel und Lagerbock liegen hinter,
+    # die Tuer ueber der Schwenkebene.)
     "lever_pivot": (-0.21, -0.360, 0.470),
     "lever_arm":  dict(x0=-0.255, x1=-0.165, y0=-0.405, y1=-0.360, z0=0.470, z1=0.655),
     "lever_knob": dict(x0=-0.295, x1=-0.125, y0=-0.425, y1=-0.350, z0=0.630, z1=0.700),
     "lever_boss": dict(x0=-0.280, x1=-0.140, y0=-0.368, y1=-0.320, z0=0.400, z1=0.540),
-    # 135 Grad: gerade so viel Schwenk, dass die Hebelspitze in der Schaltzone
-    # bleibt (Kasten-Unterkante 0.28) — geprueft mit lever_sweep_bounds().
+    # 135 Grad Vorwaertskipp: deutlich ueber die Horizontale hinaus nach unten,
+    # liest sich als "geflogen". Schwenkraum mit lever_sweep_bounds() pruefbar;
+    # der Hebel ragt am Scheitel (~90 Grad) rund 0.6 m in den Raum — gewollt,
+    # das ist der Comedy-Moment.
     "lever_blowout_deg": 135.0,
 
     # Lastsaeule (rechts) — als U-Profil gebaut, damit die Nut echte Geometrie ist
@@ -1319,12 +1326,13 @@ def build_fx_anchors():
 
 def set_lever(deg):
     """Hebelstellung. 0 = EIN (senkrecht), CONFIG['lever_blowout_deg'] = geflogen.
-    Rotation um die Y-Achse -> der Hebel schwenkt FLACH vor der Front,
-    kann also nie mit Tuer oder Glas kollidieren."""
+    Rotation um die X-Achse, negativ angewandt -> der Hebel kippt wie ein
+    Messerschalter nach VORNE-UNTEN aus der Wand (gleiche Bewegungsrichtung
+    wie die Bank-Kipphebel, siehe set_bank)."""
     import math
     lever = bpy.data.objects.get("Breaker_Lever")
     if lever:
-        lever.rotation_euler = (0.0, math.radians(deg), 0.0)
+        lever.rotation_euler = (math.radians(-deg), 0.0, 0.0)
         bpy.context.view_layer.update()
     return lever
 
