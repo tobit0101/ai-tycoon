@@ -25,6 +25,15 @@ namespace AITycoon.Features.SystemLoad
         [Tooltip("Kipp-Transform der Hauptsicherung. Optional.")]
         [SerializeField] private Transform breakerLever;
 
+        [Tooltip("Tuer-Transform (Box_Door). Optional — der Blowout laeuft sonst ohne Tuer.")]
+        [SerializeField] private Transform boxDoor;
+
+        [Tooltip("Kipphebel-Bank in der Nische (Breaker_Bank, seit ASSET_VERSION 3). Optional.")]
+        [SerializeField] private Transform breakerBank;
+
+        [Tooltip("Renderer der Bank-Kipphebel (Breaker_Tog_XX) — im Fehlerfall rot getintet.")]
+        [SerializeField] private Renderer[] bankToggles;
+
         [Header("Colors")]
         [SerializeField] private Color emptyColor = new Color(0.16f, 0.17f, 0.19f);
         [SerializeField] private Color lowColor = new Color(0.30f, 0.85f, 0.35f);
@@ -40,8 +49,36 @@ namespace AITycoon.Features.SystemLoad
         [Header("Lever")]
         [Tooltip("Kippwinkel um die lokale Y-Achse, wenn die Sicherung fliegt. Negativ = nach unten rechts.")]
         [SerializeField] private float leverBlowoutAngle = -135f;
-        [Tooltip("Sekunden, bis der Hebel zurueckkippt.")]
+        [Tooltip("Sekunden, bis die Reset-Sequenz beginnt.")]
         [SerializeField] private float leverResetDelay = 4f;
+
+        [Header("Blowout-Choreografie")]
+        [Tooltip("Kippwinkel der Bank um lokal X. Vorzeichen aus der Blender-Spiegelregel " +
+                 "abgeleitet (Blender -55 -> Unity +55) — beim ersten Play-Mode-Test visuell " +
+                 "verifizieren, wie beim Hebel geschehen.")]
+        [SerializeField] private float bankBlowoutAngle = 55f;
+        [Tooltip("Sekunden, die die Bank dem Haupthebel hinterherschnappt — liest sich als " +
+                 "Kraftuebertragung ueber die Schubstange.")]
+        [SerializeField] private float bankFollowDelay = 0.07f;
+        [Tooltip("Oeffnungswinkel der Tuer um lokal Z beim Blowout (Blender-Scharnier: -75 = offen).")]
+        [SerializeField] private float doorOpenAngle = 75f;
+        [Tooltip("Dauer des Hebel-/Bank-Schlags. Kurz — das ist ein Ereignis, keine Handlung.")]
+        [SerializeField] private float leverSlamDuration = 0.12f;
+        [SerializeField] private float doorOpenDuration = 0.35f;
+        [SerializeField] private float doorCloseDuration = 0.6f;
+        [Tooltip("Dauer des Zurueckdrueckens von Bank und Hebel — bewusst langsamer als der Schlag.")]
+        [SerializeField] private float leverResetDuration = 0.8f;
+        [Tooltip("Easing fuers Rausfliegen. Werte ueber 1 ergeben den Ueberschwinger.")]
+        [SerializeField] private AnimationCurve slamCurve = new AnimationCurve(
+            new Keyframe(0f, 0f, 0f, 3.2f),
+            new Keyframe(0.7f, 1.08f),
+            new Keyframe(1f, 1f));
+        [Tooltip("Easing fuers Zuruecksetzen — ruhig, ohne Ueberschwinger.")]
+        [SerializeField] private AnimationCurve settleCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+        [Tooltip("Tint der Bank-Kipphebel im Fehlerfall. HDR-Faktor > 1, weil die Hebel dunkel " +
+                 "gebacken sind — _BaseColor multipliziert die Textur, ohne Faktor bliebe der " +
+                 "Tint nahezu unsichtbar.")]
+        [SerializeField] private Color toggleTripColor = new Color(2.5f, 0.35f, 0.3f);
 
         // Wiederverwendeter Property-Block statt pro Segment eine Material-Instanz zu erzeugen
         // (segments[i].material wuerde bei jedem Aufruf eine dauerhafte Kopie anlegen - Leak).
@@ -79,6 +116,25 @@ namespace AITycoon.Features.SystemLoad
             breakerLever = lever;
         }
 
+        /// <summary>
+        /// Verbindet diesen Presenter mit der Tuer (Box_Door). Darf null sein —
+        /// die Blowout-Choreografie ueberspringt dann den Tuer-Teil.
+        /// </summary>
+        public void AssignDoor(Transform door)
+        {
+            boxDoor = door;
+        }
+
+        /// <summary>
+        /// Verbindet diesen Presenter mit der Kipphebel-Bank in der Nische (Breaker_Bank)
+        /// samt der Kipphebel-Renderer fuer den Fehlerfall-Tint. Beides darf null sein.
+        /// </summary>
+        public void AssignBank(Transform bank, Renderer[] toggles)
+        {
+            breakerBank = bank;
+            bankToggles = toggles;
+        }
+
         private void Awake()
         {
             if (monitor == null)
@@ -107,6 +163,11 @@ namespace AITycoon.Features.SystemLoad
             _blownOut = false;
             if (breakerLever != null)
                 breakerLever.localRotation = Quaternion.identity;
+            if (breakerBank != null)
+                breakerBank.localRotation = Quaternion.identity;
+            if (boxDoor != null)
+                boxDoor.localRotation = Quaternion.identity;
+            TintBankToggles(false);
         }
 
         private void OnSample(SystemLoadSample sample) => Apply(sample.Fraction01);
@@ -196,9 +257,13 @@ namespace AITycoon.Features.SystemLoad
         }
 
         /// <summary>
-        /// Oeffentlicher Hook fuer Story-/Comedy-Events: die Sicherung "fliegt" - Hebel kippt,
-        /// Saeule wird schlagartig leer, und nach <see cref="leverResetDelay"/> Sekunden kippt
-        /// alles zurueck auf den zuletzt bekannten Lastwert.
+        /// Oeffentlicher Hook fuer Story-/Comedy-Events: die Sicherung "fliegt" als komplette
+        /// Choreografie — Hebel knallt heraus, die Bank-Kipphebel in der Nische schnappen einen
+        /// Wimpernschlag spaeter nach (Kraftuebertragung ueber die Schubstange) und werden rot
+        /// getintet, die Tuer springt auf, die Saeule wird schlagartig leer. Nach
+        /// <see cref="leverResetDelay"/> Sekunden laeuft die Umkehrung mit bewusst anderer
+        /// Dramaturgie: Tuer zu, Bank hoch, Hebel wird langsam "reingedrueckt" — Rausfliegen ist
+        /// ein Ereignis, Reinmachen eine Handlung.
         /// </summary>
         public void TriggerBlowout()
         {
@@ -212,26 +277,31 @@ namespace AITycoon.Features.SystemLoad
         {
             _blownOut = true;
 
-            if (breakerLever != null)
-            {
-                // Achse am Mesh vermessen, nicht aus der FBX-Konvertierung hergeleitet: die
-                // erwartete Umrechnung Blender (x, y, z) -> Unity (x, z, -y) findet bei FuseBox.fbx
-                // gar nicht statt, weil dessen Header bereits Unitys Achsen meldet (UpAxis = Y).
-                // Die lokalen Mesh-Bounds von Breaker_Lever sind (0.17, 0.08, 0.23) mit Ausdehnung
-                // entlang +Z: die lange Achse des Hebels IST lokal Z, die duenne Achse ist lokal Y.
-                // Gekippt wird also um lokal Y — eine Drehung um lokal Z wuerde den Hebel nur um
-                // seinen eigenen Schaft verdrehen und waere praktisch unsichtbar.
-                // Vorzeichen visuell verifiziert: negativ kippt nach unten rechts, ueber die
-                // Klappe; positiv nach unten links, wo der Hebel das gelbe Warnschild verdeckt.
-                breakerLever.localRotation = Quaternion.Euler(0f, leverBlowoutAngle, 0f);
-            }
-
+            // Der Strom ist SOFORT weg — die Saeule erlischt mit dem Schlag, nicht danach.
             SetAllSegmentsEmpty();
+
+            yield return SlamPhase();
+            TintBankToggles(true);
+
+            // Tuer springt auf — federnd (slamCurve), sie wird vom Ereignis aufgestossen.
+            if (boxDoor != null)
+                yield return RotateLocal(boxDoor, Quaternion.Euler(0f, 0f, doorOpenAngle),
+                                         doorOpenDuration, slamCurve);
 
             yield return new WaitForSeconds(leverResetDelay);
 
+            // Reset-Dramaturgie: erst die Tuer (ruhig), dann die Bank, zuletzt der Haupthebel.
+            if (boxDoor != null)
+                yield return RotateLocal(boxDoor, Quaternion.identity, doorCloseDuration, settleCurve);
+
+            if (breakerBank != null)
+                yield return RotateLocal(breakerBank, Quaternion.identity,
+                                         leverResetDuration * 0.5f, settleCurve);
+            TintBankToggles(false);
+
             if (breakerLever != null)
-                breakerLever.localRotation = Quaternion.identity;
+                yield return RotateLocal(breakerLever, Quaternion.identity,
+                                         leverResetDuration, settleCurve);
 
             // Keine duplizierte Faerbungs-Logik - einfach die bestehende Apply()-Logik mit dem
             // zuletzt bekannten Sample-Wert erneut anwenden. Das Flag muss vorher fallen,
@@ -240,6 +310,100 @@ namespace AITycoon.Features.SystemLoad
             Apply(_lastFraction01);
 
             _blowoutRoutine = null;
+        }
+
+        /// <summary>
+        /// Hebel und Bank schlagen fast gleichzeitig heraus — die Bank um
+        /// <see cref="bankFollowDelay"/> versetzt. Beide laufen in EINER Coroutine, damit
+        /// TriggerBlowout() bei einem Re-Trigger keine verwaisten Teil-Animationen hinterlaesst
+        /// (StopCoroutine stoppt nur die Haupt-Routine, keine verschachtelten Starts).
+        /// </summary>
+        private IEnumerator SlamPhase()
+        {
+            // Achse am Mesh vermessen, nicht aus der FBX-Konvertierung hergeleitet: die
+            // erwartete Umrechnung Blender (x, y, z) -> Unity (x, z, -y) findet bei FuseBox.fbx
+            // gar nicht statt, weil dessen Header bereits Unitys Achsen meldet (UpAxis = Y).
+            // Die lokalen Mesh-Bounds von Breaker_Lever sind (0.17, 0.08, 0.23) mit Ausdehnung
+            // entlang +Z: die lange Achse des Hebels IST lokal Z, die duenne Achse ist lokal Y.
+            // Gekippt wird also um lokal Y — eine Drehung um lokal Z wuerde den Hebel nur um
+            // seinen eigenen Schaft verdrehen und waere praktisch unsichtbar.
+            // Vorzeichen visuell verifiziert: negativ kippt nach unten rechts, ueber die
+            // Klappe; positiv nach unten links, wo der Hebel das gelbe Warnschild verdeckt.
+            // Fuer die Bank gilt dieselbe Regel: Blender-X bleibt lokal X, Vorzeichen gespiegelt.
+            Quaternion leverFrom = breakerLever != null ? breakerLever.localRotation : Quaternion.identity;
+            Quaternion bankFrom = breakerBank != null ? breakerBank.localRotation : Quaternion.identity;
+            Quaternion leverTo = Quaternion.Euler(0f, leverBlowoutAngle, 0f);
+            Quaternion bankTo = Quaternion.Euler(bankBlowoutAngle, 0f, 0f);
+
+            // Untergrenze gegen Division durch 0, falls die Dauer im Inspector auf 0 steht.
+            float slam = Mathf.Max(leverSlamDuration, 0.0001f);
+            float total = slam + bankFollowDelay;
+            for (float t = 0f; t < total; t += Time.deltaTime)
+            {
+                if (breakerLever != null)
+                {
+                    float k = Mathf.Clamp01(t / slam);
+                    breakerLever.localRotation =
+                        Quaternion.SlerpUnclamped(leverFrom, leverTo, slamCurve.Evaluate(k));
+                }
+                if (breakerBank != null)
+                {
+                    float k = Mathf.Clamp01((t - bankFollowDelay) / slam);
+                    breakerBank.localRotation =
+                        Quaternion.SlerpUnclamped(bankFrom, bankTo, slamCurve.Evaluate(k));
+                }
+                yield return null;
+            }
+
+            if (breakerLever != null)
+                breakerLever.localRotation = leverTo;
+            if (breakerBank != null)
+                breakerBank.localRotation = bankTo;
+        }
+
+        /// <summary>
+        /// Dreht ein Transform ueber eine Kurve auf eine lokale Ziel-Rotation.
+        /// SlerpUnclamped, damit Kurvenwerte ueber 1 (Ueberschwinger) wirken koennen.
+        /// </summary>
+        private static IEnumerator RotateLocal(Transform target, Quaternion to,
+                                               float duration, AnimationCurve curve)
+        {
+            Quaternion from = target.localRotation;
+            if (duration <= 0f)
+            {
+                target.localRotation = to;
+                yield break;
+            }
+
+            for (float t = 0f; t < duration; t += Time.deltaTime)
+            {
+                target.localRotation =
+                    Quaternion.SlerpUnclamped(from, to, curve.Evaluate(t / duration));
+                yield return null;
+            }
+            target.localRotation = to;
+        }
+
+        /// <summary>
+        /// Tintet die Bank-Kipphebel rot (Fehlerfall) bzw. zurueck auf neutral — per
+        /// MaterialPropertyBlock, aus demselben Grund wie bei den Segmenten (kein Material-Leak,
+        /// Batch bleibt erhalten).
+        /// </summary>
+        private void TintBankToggles(bool tripped)
+        {
+            if (bankToggles == null)
+                return;
+
+            _mpb ??= new MaterialPropertyBlock();
+            foreach (Renderer toggle in bankToggles)
+            {
+                if (toggle == null)
+                    continue;
+
+                toggle.GetPropertyBlock(_mpb);
+                _mpb.SetColor("_BaseColor", tripped ? toggleTripColor : Color.white);
+                toggle.SetPropertyBlock(_mpb);
+            }
         }
 
         [ContextMenu("Sicherung testweise ausloesen (Play Mode)")]

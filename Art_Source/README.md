@@ -55,9 +55,12 @@ Rot zeigt Unity im Fehlerfall per MaterialPropertyBlock-Tint.
 
 ### Achsen
 
-In Blender zeigt die Front nach **−Y**, oben ist **+Z**. Der FBX-Export mit `-Z Forward / Y Up`
-ergibt in Unity korrekt +Z forward / +Y up. Eine Rotation um Blenders Y-Achse (der Sicherungshebel)
-entspricht in Unity einer Rotation um die **lokale Z-Achse**.
+In Blender zeigt die Front nach **−Y**, oben ist **+Z**. **In Unity vermessen** (Kommentar in
+`LoadPillar.SlamPhase()`): Bei FuseBox.fbx findet keine Achskonvertierung statt — die Kinder
+behalten ihre lokalen Blender-Achsen (der Instanz-Root kompensiert mit −90°/180°), nur das
+Drehvorzeichen spiegelt. Also: Hebel = **lokal Y** (vermessen), Bank = **lokal X**, Tür =
+**lokal Z** (beide nach derselben Regel abgeleitet — Vorzeichen beim ersten Play-Mode-Test
+verifizieren).
 
 ### Stil-Regeln (nicht verhandelbar)
 
@@ -169,9 +172,9 @@ zeigt in Blender `F.preview_load(0.58)`.
 
 | Teil | Ursprung | Achse (Blender) | Achse (Unity) | Ruhe | Ausschlag |
 |---|---|---|---|---|---|
-| `Breaker_Lever` | Drehpunkt der Schaltertafel | Y | lokal Z | 0° (senkrecht = EIN) | 135° (geflogen) |
-| `Breaker_Bank` | Kippachse der DIN-Schiene | X | lokal X | 0° (alle EIN) | −55° (alle geflogen) |
-| `Box_Door` | linke Scharnierkante | Z | lokal Y | 0° (zu) | ca. −75° (offen) |
+| `Breaker_Lever` | Drehpunkt der Schaltertafel | Y | lokal Y (Vorzeichen gespiegelt) | 0° (senkrecht = EIN) | 135° (geflogen) |
+| `Breaker_Bank` | Kippachse der DIN-Schiene | X | lokal X (Vorzeichen gespiegelt) | 0° (alle EIN) | −55° (alle geflogen) |
+| `Box_Door` | linke Scharnierkante | Z | lokal Z (Vorzeichen gespiegelt) | 0° (zu) | ca. −75° (offen) |
 
 Der Hebelausschlag ist mit `lever_sweep_bounds()` so gewählt, dass die Hebelspitze über den
 gesamten Schwenk in der Schaltzone bleibt und nie mit Tür oder Glas kollidiert — er schwenkt

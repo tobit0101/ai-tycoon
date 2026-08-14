@@ -462,6 +462,33 @@ namespace AITycoon.Features.GridBuilder
                                  "gefunden — Hebel bleibt unanimiert.");
             pillar.AssignLever(lever);
 
+            Transform door = holder.transform.Find("Box_Door");
+            if (door == null)
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Box_Door' nicht " +
+                                 "gefunden — Tuer bleibt beim Blowout zu.");
+            pillar.AssignDoor(door);
+
+            // Kipphebel-Bank in der Nische (seit ASSET_VERSION 3): das Empty kippt beim Blowout,
+            // die Kipphebel-Renderer werden dabei rot getintet. Beides optional — aeltere
+            // FBX-Staende ohne Bank loggen nur eine Warnung.
+            Transform bank = holder.transform.Find("Breaker_Bank");
+            if (bank == null)
+            {
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Breaker_Bank' nicht " +
+                                 "gefunden — Nischen-Kipphebel bleiben unanimiert.");
+                pillar.AssignBank(null, null);
+            }
+            else
+            {
+                Renderer[] toggles = bank.Cast<Transform>()
+                    .Where(t => t.name.StartsWith("Breaker_Tog_", System.StringComparison.Ordinal))
+                    .OrderBy(t => t.name, System.StringComparer.Ordinal)
+                    .Select(t => t.GetComponent<Renderer>())
+                    .Where(r => r != null)
+                    .ToArray();
+                pillar.AssignBank(bank, toggles);
+            }
+
             // Kein BoxCollider hier: BakeNavMesh() sammelt ueber CollectObjects.Children +
             // NavMeshCollectGeometry.RenderMeshes ausschliesslich Render-Meshes fuer den Bake
             // (siehe Kommentar dort: "RenderMeshes und nicht PhysicsColliders"). Ein Collider
