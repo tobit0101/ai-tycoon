@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using AITycoon.Features.AI_Agents;
 using AITycoon.Features.SystemLoad;
 using Unity.AI.Navigation;
@@ -368,61 +369,106 @@ namespace AITycoon.Features.GridBuilder
         // ------------------------------------------------------------------ Sicherung + Lastsaeule
 
         /// <summary>
-        /// Weltobjekt-Haelfte der Denklast (Konzept §2.3). Platzhalter aus Primitives — es gibt im
-        /// Projekt kein passendes Asset, und ein eigenes Modell ist fuer M1 nicht der Engpass.
+        /// Weltobjekt-Haelfte der Denklast (Konzept §2.3). Instanziiert das echte Blender-Modell
+        /// FuseBox.fbx (Art/Models) — der fruehe Primitive-Platzhalter ist damit ueberfluessig.
         /// Position: Nordwand direkt hinter der Denk-Station, damit Engpass und Anzeige im selben
         /// Kamerabild liegen. Das ist die Lesbarkeits-Anforderung, nicht Deko.
         /// </summary>
         private static void BuildFuseBox(Transform parent)
         {
-            Material mat = GetOrCreateSegmentMaterial();
+            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_AITycoon/Art/Models/FuseBox.fbx");
+            if (prefab == null)
+            {
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx nicht gefunden unter " +
+                                 "Assets/_AITycoon/Art/Models/ — Sicherungskasten wird uebersprungen.");
+                return;
+            }
 
             Vector3 cell = OfficeGrid.CellCenter(OfficeGrid.FuseBox);
-            float innerZ = cell.z - OfficeGrid.WallThickness * 0.5f;
 
-            GameObject holder = new GameObject("Sicherungskasten");
-            holder.transform.SetParent(parent, false);
-            holder.transform.position = new Vector3(cell.x, 0f, innerZ);
+            GameObject holder = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent);
+            holder.name = "Sicherungskasten";
+            holder.transform.position = new Vector3(
+                cell.x,
+                OfficeGrid.FuseBoxMountHeight,
+                cell.z - OfficeGrid.WallThickness * 0.5f);
+            // Zwei Drehungen in einer, Reihenfolge beachten — Quaternion.Euler(x, y, z) wendet
+            // Z, dann X, dann Y an, hier also erst die -90 um X und danach die 180 um Y:
+            //
+            // 1) -90 um X gleicht die Achsen des FBX aus. Der Header von FuseBox.fbx meldet
+            //    UpAxis = 1 (Y) und FrontAxis = 2 (Z), also exakt Unitys System — Unity konvertiert
+            //    daraufhin nichts. Die Geometrie liegt aber in rohen Blender-Achsen (Z = oben):
+            //    gemessen 1.16 x 1.45 x 0.425 auf X/Z/Y statt auf X/Y/Z, der Kasten liegt also
+            //    flach. Die Kompensation gehoert bewusst auf den Root der Instanz und nicht in den
+            //    Import: so behalten alle Kinder ihre lokale Identitaets-Rotation, worauf sich
+            //    LoadPillar beim Zuruecksetzen des Hebels verlaesst.
+            //    Sobald die Blender-Quelle unter Art_Source/ korrekt Y-up exportiert, faellt hier
+            //    nur die -90 weg.
+            // 2) 180 um Y, weil das Modell nach +Z schaut, der Raum von der Nordwand aus aber
+            //    in -Z liegt. Nicht "korrigieren": sonst blickt der Sicherungskasten in die Wand.
+            holder.transform.rotation = Quaternion.Euler(-90f, 180f, 0f);
+            holder.transform.localScale = Vector3.one;
 
-            GameObject box = Primitive(holder.transform, "Kasten", mat,
-                new Vector3(0f, 2.45f, -0.16f), new Vector3(0.8f, 0.55f, 0.3f));
-            box.transform.localRotation = Quaternion.identity;
-
-            GameObject backing = Primitive(holder.transform, "Lastsaeule_Blende", mat,
-                new Vector3(0f, 1.25f, -0.09f), new Vector3(0.85f, 2.0f, 0.14f));
-            backing.transform.localRotation = Quaternion.identity;
-
-            // 8 Segmente: Belegung, kein Tank. Sie leuchten auf und erloeschen wieder.
             LoadPillar pillar = holder.AddComponent<LoadPillar>();
-            Renderer[] segments = new Renderer[8];
-            for (int i = 0; i < segments.Length; i++)
+
+            // Segmente dynamisch einsammeln statt hart zu codieren: Segment_00 … Segment_11 sind
+            // per Zero-Padding alphabetisch = numerisch sortiert (unten nach oben).
+            Transform segmentsRoot = holder.transform.Find("Segments");
+            if (segmentsRoot == null || segmentsRoot.childCount == 0)
             {
-                GameObject seg = Primitive(holder.transform, $"Segment_{i:00}", mat,
-                    new Vector3(0f, 0.45f + i * 0.22f, -0.20f),
-                    new Vector3(0.62f, 0.16f, 0.16f));
-                segments[i] = seg.GetComponent<Renderer>();
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: Kind 'Segments' fehlt oder " +
+                                 "ist leer — Lastsaeule bleibt ohne Segmente.");
             }
-            pillar.AssignSegments(segments);
-        }
+            else
+            {
+                Transform[] ordered = segmentsRoot.Cast<Transform>()
+                    .OrderBy(t => t.name, System.StringComparer.Ordinal)
+                    .ToArray();
 
-        private static GameObject Primitive(Transform parent, string name, Material mat,
-                                            Vector3 localPos, Vector3 size)
-        {
-            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            go.transform.SetParent(parent, false);
-            go.transform.localPosition = localPos;
-            go.transform.localScale = size;
+                List<Renderer> segments = new List<Renderer>(ordered.Length);
+                foreach (Transform seg in ordered)
+                {
+                    Renderer r = seg.GetComponent<Renderer>();
+                    if (r == null)
+                    {
+                        Debug.LogWarning($"[OfficeLayoutBuilder] FuseBox.fbx: Segment '{seg.name}' " +
+                                         "hat keinen Renderer — uebersprungen.");
+                        continue;
+                    }
+                    segments.Add(r);
+                }
 
-            // Platzhalter sollen weder Physik noch NavMesh-Geometrie beeinflussen.
-            Collider col = go.GetComponent<Collider>();
-            if (col != null)
-                Object.DestroyImmediate(col);
+                if (segments.Count == 0)
+                {
+                    Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: keine gueltigen " +
+                                     "Segment-Renderer unter 'Segments' gefunden.");
+                }
+                else
+                {
+                    // Gemeinsames Material statt der drei FBX-Bandfarben: LoadPillar faerbt zur
+                    // Laufzeit ohnehin per MaterialPropertyBlock um, ein geteiltes Material haelt
+                    // dabei alle Segmente in einem Batch.
+                    Material segMat = GetOrCreateSegmentMaterial();
+                    foreach (Renderer r in segments)
+                        r.sharedMaterial = segMat;
 
-            if (mat != null)
-                go.GetComponent<Renderer>().sharedMaterial = mat;
+                    pillar.AssignSegments(segments.ToArray());
+                }
+            }
 
-            return go;
+            Transform lever = holder.transform.Find("Breaker_Lever");
+            if (lever == null)
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Breaker_Lever' nicht " +
+                                 "gefunden — Hebel bleibt unanimiert.");
+            pillar.AssignLever(lever);
+
+            // Kein BoxCollider hier: BakeNavMesh() sammelt ueber CollectObjects.Children +
+            // NavMeshCollectGeometry.RenderMeshes ausschliesslich Render-Meshes fuer den Bake
+            // (siehe Kommentar dort: "RenderMeshes und nicht PhysicsColliders"). Ein Collider
+            // wuerde also weder das NavMesh beeinflussen noch gebraucht — die FBX-Meshes selbst
+            // sind als Kind von [Office] ohnehin schon Teil der eingesammelten Geometrie. Ohne
+            // eine belastbare Notwendigkeit fuer Physik/Klick-Interaktion bleibt er bewusst weg,
+            // statt eines zu raten.
         }
 
         /// <summary>
@@ -437,6 +483,12 @@ namespace AITycoon.Features.GridBuilder
             if (existing != null)
             {
                 ApplyColor(existing, unlit);
+                // MaterialPropertyBlock (das LoadPillar fuer die Laufzeit-Einfaerbung nutzt) kann
+                // Shader-Keywords nicht setzen — das _EMISSION-Keyword muss deshalb einmalig am
+                // geteilten Material aktiviert sein, sonst bleibt die Emission-Farbe wirkungslos,
+                // egal was LoadPillar per PropertyBlock setzt.
+                existing.EnableKeyword("_EMISSION");
+                existing.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                 return existing;
             }
 
@@ -446,6 +498,8 @@ namespace AITycoon.Features.GridBuilder
             Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
             Material mat = new Material(shader) { name = "M_LoadSegment" };
             ApplyColor(mat, unlit);
+            mat.EnableKeyword("_EMISSION");
+            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
             AssetDatabase.CreateAsset(mat, SegmentMaterialPath);
             AssetDatabase.SaveAssets();

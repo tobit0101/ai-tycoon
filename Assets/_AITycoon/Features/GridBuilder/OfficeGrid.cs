@@ -58,6 +58,11 @@ namespace AITycoon.Features.GridBuilder
         /// <summary>Hoehe eines Wandstuecks nach Skalierung.</summary>
         public const float WallHeight = 2.0f * KitScale;
 
+        /// <summary>Montagehoehe der Unterkante des Sicherungskastens ueber dem Boden.
+        /// Bei 1.45 m Modellhoehe reicht die Lastsaeule damit bis 2.20 m — ueber Kopfhoehe
+        /// eines 1.95 m grossen Agenten, also aus der Iso-Perspektive nie verdeckt.</summary>
+        public const float FuseBoxMountHeight = 0.75f;
+
         /// <summary>
         /// Der Grundriss. Zeile 0 ist z = Depth-1 (Norden), damit das Array genauso aussieht
         /// wie der Grundriss im Konzept-Dokument.
