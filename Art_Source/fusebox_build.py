@@ -18,6 +18,11 @@ from mathutils import Vector, Matrix
 # ---------------------------------------------------------------- CONFIG ----
 
 CONFIG = {
+    # Asset-Version: hochzaehlen, wenn sich der Export inhaltlich aendert.
+    # 1 = Modellbau (Commit 6bb5fd2), 2 = Textur-Stufe (Atlas-UVs, gebackene Maps,
+    # FX-Anker, Decals), 3 = Sicherungsbank in der Nische statt rotem Block.
+    "ASSET_VERSION": 3,
+
     # Gesamt-Baugruppe
     "total_w": 1.16,
     "total_h": 1.45,
@@ -39,8 +44,25 @@ CONFIG = {
     "glass":     dict(x0=-0.430, x1=0.010, y0=-0.338, y1=-0.327, z0=0.760, z1=1.140),
 
     # --- Hauptsicherung ---------------------------------------------------
-    # Sicherungsblock in der Nische, durch das Fenster sichtbar
-    "breaker":   dict(x0=-0.35, x1=-0.07, y0=-0.26, y1=-0.15, z0=0.80, z1=1.10),
+    # Sicherungsbank in der Nische (seit ASSET_VERSION 3): DIN-Schiene mit
+    # din_count Modulen samt Kipphebeln. Modulanzahl = sichtbare Denklast-
+    # Kapazitaet (Unity blendet Breaker_Mod_XX/Breaker_Tog_XX paarweise);
+    # Breaker_Bank kippt beim Blowout alle Kipphebel synchron zum Riesenhebel.
+    # Grosse Massen bleiben neutral-grau — Rot erscheint in der Nische nur im
+    # Fehlerfall (Laufzeit-Tint), damit der rote Riesenhebel der Held bleibt.
+    "din_center_x": -0.21,
+    "din_count": 6,
+    "din_pitch": 0.067,
+    "din_module": dict(w=0.056, d=0.050, h=0.160),
+    "din_module_y1": -0.160,       # Modul-Rueckseite (zur Nischenwand)
+    "din_module_z0": 0.860,
+    "din_rail":   dict(x0=-0.410, x1=-0.010, y0=-0.185, y1=-0.160, z0=0.925, z1=0.955),
+    "din_term":   dict(x0=-0.400, x1=-0.020, y0=-0.195, y1=-0.160, z0=1.040, z1=1.080),
+    "din_bus":    dict(count=3, w=0.020, y0=-0.192, y1=-0.160, z0=0.780, z1=0.860),
+    "din_rod":    dict(x0=-0.222, x1=-0.198, y0=-0.206, y1=-0.182, z0=0.774, z1=0.930),
+    "din_toggle": dict(w=0.030, y0=-0.238, y1=-0.210, z0=0.893, z1=0.950),
+    "din_bank_pivot": (-0.21, -0.216, 0.905),
+    "bank_blowout_deg": -55.0,
     # Dunkle Nischenrueckwand — sonst verliert der Sicherungsblock im hellen
     # Gehaeuseinneren jeden Kontrast.
     "niche_back": dict(x0=-0.44, x1=0.02, y0=-0.152, y1=-0.140, z0=0.76, z1=1.14),
@@ -342,7 +364,10 @@ ASSIGNMENT = {
     "Box_DoorGlass": "(Mat)Glass",
     "Box_Handle":    "(Mat)MetallicBlack",
     "Breaker_Backboard": "(Mat)GradientBlack",
-    "Breaker_Base":  "(Mat)GradientDarkRed",
+    "Breaker_Rail":  "(Mat)MetallicBlack",
+    "Breaker_Term":  "(Mat)GradientDarkGrey",
+    "Breaker_Bus":   "(Mat)GradientYellow",
+    "Breaker_Rod":   "(Mat)MetallicBlack",
     "Breaker_Plate": "(Mat)GradientDarkGrey",
     "Breaker_Boss":  "(Mat)MetallicBlack",
     "Breaker_Lever": "(Mat)GradientRed",
@@ -357,6 +382,17 @@ ASSIGNMENT = {
     "Screw_00": "(Mat)MetallicBlack", "Screw_01": "(Mat)MetallicBlack",
     "Screw_02": "(Mat)MetallicBlack", "Screw_03": "(Mat)MetallicBlack",
 }
+
+def material_for(name):
+    """nappin-Quellmaterial eines Bauteils. Die DIN-Module/-Kipphebel sind
+    dynamisch (din_count), deshalb hier statt weiterer ASSIGNMENT-Eintraege.
+    Kipphebel neutral dunkel: Rot zeigt Unity nur im Fehlerfall per Tint."""
+    if name.startswith("Breaker_Mod_"):
+        return "(Mat)GradientGrey"
+    if name.startswith("Breaker_Tog_"):
+        return "(Mat)MetallicBlack"
+    return ASSIGNMENT[name]
+
 
 SEG_MAT = {
     "green":  "(Mat)FuseSegment_Green",
@@ -384,14 +420,35 @@ def build_materials(with_textures=True):
 
 
 def assign_materials():
-    """E.3/E.4 — Material je Bauteil, Segmente nach Farbband."""
+    """E.3/E.4 — Material je Bauteil, Segmente nach Farbband.
+
+    Seit der Textur-Stufe (ASSET_VERSION 2): Existiert das gebackene M_FuseBox,
+    teilen sich alle Atlas-Teile dieses eine Material. Ausnahmen:
+      - Box_DoorGlass bleibt (Mat)Glass — Transparenz laesst sich nicht in ein
+        opakes Atlas-Material backen.
+      - Segmente bleiben (Mat)FuseSegment_Off — LoadPillar faerbt sie zur
+        Laufzeit per MaterialPropertyBlock ein.
+      - Decal_* bekommen M_FuseBox_Labels (Alpha-Clip aufs Sticker-Sheet).
+    Solange M_FuseBox fehlt, faellt alles auf die nappin-Zuordnung zurueck."""
+    baked = bpy.data.materials.get("M_FuseBox")
     missing = []
-    for obj_name, mat_name in ASSIGNMENT.items():
+    names = list(ASSIGNMENT) + [f"Breaker_Mod_{i:02d}" for i in range(CONFIG["din_count"])] \
+        + [f"Breaker_Tog_{i:02d}" for i in range(CONFIG["din_count"])]
+    for obj_name in names:
         obj = bpy.data.objects.get(obj_name)
         if obj is None:
             missing.append(obj_name)
             continue
-        assign_mat(obj, mat_name)
+        if baked and obj_name != "Box_DoorGlass":
+            assign_mat(obj, "M_FuseBox")
+        else:
+            assign_mat(obj, material_for(obj_name))
+
+    if bpy.data.materials.get("M_FuseBox_Labels"):
+        for obj in _collection().all_objects:
+            if obj.type == 'MESH' and obj.name.startswith("Decal_"):
+                spec = LABELS.get(obj.name, {})
+                assign_mat(obj, spec.get("mat", "M_FuseBox_Labels"))
 
     # Segmente bekommen EIN gemeinsames, dunkles Material — nicht ihre Bandfarbe.
     # Gruende: (1) Unity legt sonst drei ueberfluessige .mat-Assets an, (2) ein
@@ -461,6 +518,553 @@ def set_flat_uv(obj, v=0.90, u=0.5):
     return obj
 
 
+# ---------------------------------------------------------- TEXTURE BAKE ----
+# Textur-Stufe (ASSET_VERSION 2): Cube-Projection-Atlas, zwei gebackene Maps
+# (BaseColor sRGB + AO Non-Color), Decal-Quads aufs Sticker-Sheet.
+# Der Look der Gradient-Rampen wird dabei nicht ersetzt, sondern IN den Bake
+# uebernommen: die nappin-Rampe wird ueber die Welt-Hoehe gesampelt (frueher
+# war das ein UV-Trick, die UVs sind jetzt der Atlas).
+
+PROJECT_DIR = "/Users/tobias/develop/ai-tycoon"
+ART_TEX_DIR = PROJECT_DIR + "/Assets/_AITycoon/Art/Textures"
+PATTERN_PATH = PROJECT_DIR + "/Art_Source/T_FuseBox_Pattern.png"
+LABELS_SHEET = ART_TEX_DIR + "/T_FuseBox_Labels.png"
+
+# Dosierung. Zielbild "dezent angebraucht": Materialitaet ja, Muster nein.
+PATTERN_SCALE = 1.5      # m pro Kachel — eine Kachel deckt ~das ganze Modell
+PATTERN_STRENGTH = 0.30  # Einblendung des Grundmusters (um seinen Mittelwert)
+EDGE_STRENGTH = 0.12     # Kantenaufhellung ueber Pointiness
+DUST_STRENGTH = 0.16     # Staub, nur auf nach oben zeigenden Flaechen
+# Deutlich dunkler als das helle Gehaeuse: bei (0.62, 0.60, 0.55) war der
+# Effekt auf hellgrauen Oberseiten messbar unsichtbar (<1%), so sind es ~5%
+# warme Abdunklung — lesbar als Staub, immer noch unaufdringlich.
+DUST_COLOR = (0.45, 0.43, 0.38)
+
+
+def bake_objects():
+    """Alle Meshes, die in den Textur-Atlas gehen. Ausgenommen:
+    - Segment_*: LoadPillar faerbt sie zur Laufzeit per MaterialPropertyBlock —
+      eine gebackene Textur wuerde dagegen arbeiten.
+    - Decal_*: eigene triviale 0-1-UVs aufs Label-Sheet.
+    - Box_DoorGlass: Transparenz passt nicht in ein opakes Atlas-Material."""
+    objs = []
+    for o in _collection().all_objects:
+        if o.type != 'MESH':
+            continue
+        if o.name.startswith(("Segment_", "Decal_")) or o.name == "Box_DoorGlass":
+            continue
+        objs.append(o)
+    return objs
+
+
+def unwrap_for_bake(atlas_px=1024, margin_px=16):
+    """Atlas-UVs: Cube Projection pro Objekt — das Modell ist zu ~95%
+    achsparallele Quader, das ist berechenbarer und verzerrungsaermer als
+    Smart UV Project. Gegenueberliegende Boxflaechen projizieren zunaechst
+    aufeinander, sind aber getrennte Inseln — pack_islands zieht sie
+    auseinander, danach ueberlappt nichts mehr.
+    average_islands_scale sorgt vorher fuer gleiche Texeldichte ueberall."""
+    set_lever(0)
+    set_door(0)
+    objs = bake_objects()
+    bpy.ops.object.select_all(action='DESELECT')
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.context.scene.tool_settings.use_uv_select_sync = True
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.uv.cube_project(cube_size=1.0, correct_aspect=True,
+                            scale_to_bounds=False)
+    bpy.ops.uv.average_islands_scale()
+    bpy.ops.uv.pack_islands(margin=margin_px / atlas_px, rotate=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
+    return {"objects": len(objs), "uv_margin": round(margin_px / atlas_px, 4)}
+
+
+def texel_density_report(resolutions=(512, 1024, 2048)):
+    """UV-Flaeche gegen Weltflaeche -> px/m je Kandidaten-Aufloesung.
+    Sinnvolles Band fuer ein Prop aus Iso-Distanz: 256-512 px/m."""
+    import math
+    uv_area = world_area = 0.0
+    for o in bake_objects():
+        mesh = o.data
+        uv = mesh.uv_layers.active.data
+        for poly in mesh.polygons:
+            world_area += poly.area              # Scale ist 1 -> Weltflaeche
+            pts = [uv[li].uv for li in poly.loop_indices]
+            a = 0.0
+            for i in range(len(pts)):
+                x0, y0 = pts[i]
+                x1, y1 = pts[(i + 1) % len(pts)]
+                a += x0 * y1 - x1 * y0
+            uv_area += abs(a) * 0.5
+    density = math.sqrt(uv_area / world_area) if world_area else 0.0
+    out = {"uv_area": round(uv_area, 4),
+           "world_area_m2": round(world_area, 3),
+           "uv_utilisation": round(uv_area * 100, 1)}
+    for r in resolutions:
+        out[f"px_per_m@{r}"] = round(density * r)
+    return out
+
+
+def _pattern_image():
+    img = bpy.data.images.get("T_FuseBox_Pattern.png")
+    if img is None:
+        img = bpy.data.images.load(PATTERN_PATH)
+    # Non-Color: das Muster MODULIERT nur Helligkeit, es ist keine Farbe
+    img.colorspace_settings.name = 'Non-Color'
+    return img
+
+
+def _pattern_mean(img):
+    """Mittelwert des Musters. Die Einblendung rechnet (Wert - Mittel) *
+    Staerke + 1 — dadurch ist sie unabhaengig davon, wie hell das generierte
+    Bild ausgefallen ist."""
+    import numpy as np
+    arr = np.empty(len(img.pixels), dtype=np.float32)
+    img.pixels.foreach_get(arr)
+    return float(arr.reshape(-1, 4)[:, :3].mean())
+
+
+def _bake_source_materials():
+    """Namen der nappin-Quellmaterialien, die im Atlas aufgehen."""
+    return sorted({material_for(o.name) for o in bake_objects()})
+
+
+def build_bake_materials():
+    """Prozedurale Bake-Quellmaterialien — enthalten den heutigen Look statt
+    ihn zu ersetzen: nappin-Rampe (ueber Welt-Hoehe gesampelt) x Grundmuster
+    (Box-Projektion, haengt NICHT am Unwrap) x Kantenaufhellung (Pointiness)
+    x Staub (nur auf Flaechen mit Normale nach oben)."""
+    C = CONFIG
+    pattern = _pattern_image()
+    mean = _pattern_mean(pattern)
+    made = []
+
+    for src_name in _bake_source_materials():
+        spec = MATERIALS[src_name]
+        mat_name = "M_Bake_" + src_name
+        mat = bpy.data.materials.get(mat_name) or bpy.data.materials.new(mat_name)
+        mat.use_nodes = True
+        nt = mat.node_tree
+        nt.nodes.clear()
+
+        out = nt.nodes.new("ShaderNodeOutputMaterial")
+        out.location = (1300, 0)
+        bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+        bsdf.location = (1050, 0)
+        # Metallic bewusst 0: bei Metallen liefe der Diffuse-Color-Bake leer
+        bsdf.inputs["Roughness"].default_value = spec.get("roughness", 0.6)
+        nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
+        geo = nt.nodes.new("ShaderNodeNewGeometry")
+        geo.location = (-1400, 0)
+
+        # Grundfarbe: Rampe ueber Welt-Z (identisch zum bisherigen UV-Remap)
+        if spec.get("tex"):
+            sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+            sep.location = (-1200, 250)
+            nt.links.new(geo.outputs["Position"], sep.inputs["Vector"])
+            rng = nt.nodes.new("ShaderNodeMapRange")
+            rng.location = (-1000, 250)
+            rng.inputs["From Min"].default_value = 0.0
+            rng.inputs["From Max"].default_value = C["total_h"]
+            rng.inputs["To Min"].default_value = C["uv_v_min"]
+            rng.inputs["To Max"].default_value = C["uv_v_max"]
+            nt.links.new(sep.outputs["Z"], rng.inputs["Value"])
+            comb = nt.nodes.new("ShaderNodeCombineXYZ")
+            comb.location = (-800, 250)
+            comb.inputs["X"].default_value = 0.5
+            nt.links.new(rng.outputs["Result"], comb.inputs["Y"])
+            ramp = nt.nodes.new("ShaderNodeTexImage")
+            ramp.location = (-600, 250)
+            ramp.extension = 'EXTEND'
+            tex_path = NAPPIN_TEX.format(spec["tex"])
+            img = bpy.data.images.get(tex_path.split("/")[-1])
+            ramp.image = img or bpy.data.images.load(tex_path)
+            nt.links.new(comb.outputs["Vector"], ramp.inputs["Vector"])
+            base_socket = ramp.outputs["Color"]
+        else:
+            rgb = nt.nodes.new("ShaderNodeRGB")
+            rgb.location = (-600, 250)
+            rgb.outputs[0].default_value = (*spec["base"], 1.0)
+            base_socket = rgb.outputs[0]
+
+        # Grundmuster: Box-Projektion in Weltkoordinaten, 1 Kachel ~ Modell
+        pscale = nt.nodes.new("ShaderNodeVectorMath")
+        pscale.operation = 'SCALE'
+        pscale.location = (-1200, -150)
+        nt.links.new(geo.outputs["Position"], pscale.inputs[0])
+        pscale.inputs["Scale"].default_value = 1.0 / PATTERN_SCALE
+        ptex = nt.nodes.new("ShaderNodeTexImage")
+        ptex.location = (-1000, -150)
+        ptex.image = pattern
+        ptex.projection = 'BOX'
+        ptex.projection_blend = 0.3
+        nt.links.new(pscale.outputs["Vector"], ptex.inputs["Vector"])
+        psub = nt.nodes.new("ShaderNodeMath")
+        psub.operation = 'SUBTRACT'
+        psub.location = (-800, -150)
+        nt.links.new(ptex.outputs["Color"], psub.inputs[0])
+        psub.inputs[1].default_value = mean
+        pmul = nt.nodes.new("ShaderNodeMath")
+        pmul.operation = 'MULTIPLY'
+        pmul.location = (-650, -150)
+        nt.links.new(psub.outputs[0], pmul.inputs[0])
+        pmul.inputs[1].default_value = PATTERN_STRENGTH
+        padd = nt.nodes.new("ShaderNodeMath")
+        padd.operation = 'ADD'
+        padd.location = (-500, -150)
+        nt.links.new(pmul.outputs[0], padd.inputs[0])
+        padd.inputs[1].default_value = 1.0
+        patterned = nt.nodes.new("ShaderNodeVectorMath")
+        patterned.operation = 'SCALE'
+        patterned.location = (-300, 100)
+        nt.links.new(base_socket, patterned.inputs[0])
+        nt.links.new(padd.outputs[0], patterned.inputs["Scale"])
+
+        # Kantenaufhellung: Pointiness -> schmale Rampe -> MULTIPLIKATIV
+        # (Farbe x (1 + Kante x Staerke)). Additiver Weissmix wuerde dunkle
+        # Teile (MetallicBlack-Schrauben, Griff) relativ um ein Vielfaches
+        # aufhellen — multiplikativ skaliert der Effekt mit der Grundhelligkeit.
+        emap = nt.nodes.new("ShaderNodeMapRange")
+        emap.location = (-300, -350)
+        emap.inputs["From Min"].default_value = 0.50
+        emap.inputs["From Max"].default_value = 0.62
+        nt.links.new(geo.outputs["Pointiness"], emap.inputs["Value"])
+        emul = nt.nodes.new("ShaderNodeMath")
+        emul.operation = 'MULTIPLY'
+        emul.location = (-100, -350)
+        nt.links.new(emap.outputs["Result"], emul.inputs[0])
+        emul.inputs[1].default_value = EDGE_STRENGTH
+        eadd = nt.nodes.new("ShaderNodeMath")
+        eadd.operation = 'ADD'
+        eadd.location = (0, -350)
+        nt.links.new(emul.outputs[0], eadd.inputs[0])
+        eadd.inputs[1].default_value = 1.0
+        emix = nt.nodes.new("ShaderNodeVectorMath")
+        emix.operation = 'SCALE'
+        emix.location = (100, 100)
+        nt.links.new(patterned.outputs["Vector"], emix.inputs[0])
+        nt.links.new(eadd.outputs[0], emix.inputs["Scale"])
+
+        # Staub: physikalisch ehrlich nur dort, wo die Normale nach oben zeigt
+        nsep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nsep.location = (-300, -550)
+        nt.links.new(geo.outputs["Normal"], nsep.inputs["Vector"])
+        dmap = nt.nodes.new("ShaderNodeMapRange")
+        dmap.location = (-100, -550)
+        dmap.inputs["From Min"].default_value = 0.55
+        dmap.inputs["From Max"].default_value = 0.95
+        nt.links.new(nsep.outputs["Z"], dmap.inputs["Value"])
+        dmul = nt.nodes.new("ShaderNodeMath")
+        dmul.operation = 'MULTIPLY'
+        dmul.location = (100, -550)
+        nt.links.new(dmap.outputs["Result"], dmul.inputs[0])
+        dmul.inputs[1].default_value = DUST_STRENGTH
+        dmix = nt.nodes.new("ShaderNodeMix")
+        dmix.data_type = 'RGBA'
+        dmix.location = (350, 100)
+        nt.links.new(dmul.outputs[0], dmix.inputs["Factor"])
+        nt.links.new(emix.outputs["Vector"], dmix.inputs["A"])
+        dmix.inputs["B"].default_value = (*DUST_COLOR, 1.0)
+
+        nt.links.new(dmix.outputs["Result"], bsdf.inputs["Base Color"])
+
+        # Bake-Ziel-Node: bake_maps setzt das Image und macht ihn AKTIV.
+        # Bewusst unverbunden — er darf den Shader nicht beeinflussen.
+        tgt = nt.nodes.new("ShaderNodeTexImage")
+        tgt.name = "BakeTarget"
+        tgt.label = "BakeTarget"
+        tgt.location = (1050, -350)
+        made.append(mat_name)
+    return made
+
+
+def bake_maps(resolution=1024, margin_px=16, ao_samples=64, device='CPU'):
+    """AO- und BaseColor-Bake in den gemeinsamen Atlas (Cycles zwingend).
+
+    Die vier klassischen Stolperstellen sind hier abgeraeumt:
+    - Engine explizit CYCLES (EEVEE kann nicht backen),
+    - alle Atlas-Objekte gleichzeitig selektiert, in jedem Material zeigt der
+      AKTIVE Node aufs Ziel-Image (nicht etwa der Grundmuster-Node),
+    - AO beruecksichtigt die gesamte Baugruppe: Segmente und Glas bleiben
+      sichtbar und WERFEN Verschattung, empfangen aber nichts (nicht selektiert),
+    - Farbraeume: BaseColor sRGB, AO Non-Color."""
+    import os
+    scene = bpy.context.scene
+    set_lever(0)
+    set_door(0)
+
+    # Immer frisch bauen: unbenutzte Materialien ueberleben ein Speichern der
+    # .blend nicht (0 Nutzer -> Purge) — auf den Dateizustand ist kein Verlass.
+    build_bake_materials()
+
+    for o in bake_objects():
+        assign_mat(o, "M_Bake_" + material_for(o.name))
+
+    # Decals sitzen 1-2 mm VOR den Flaechen und wuerfen sonst AO-Schatten
+    hidden = []
+    for o in _collection().all_objects:
+        if o.type == 'MESH' and o.name.startswith("Decal_") and not o.hide_render:
+            o.hide_render = True
+            hidden.append(o)
+
+    def _image(name, srgb):
+        img = bpy.data.images.get(name)
+        if img and tuple(img.size) != (resolution, resolution):
+            bpy.data.images.remove(img)
+            img = None
+        if img is None:
+            img = bpy.data.images.new(name, resolution, resolution, alpha=False)
+        img.colorspace_settings.name = 'sRGB' if srgb else 'Non-Color'
+        return img
+
+    img_base = _image("T_FuseBox_BaseColor", srgb=True)
+    img_ao = _image("T_FuseBox_AO", srgb=False)
+
+    mats = [bpy.data.materials["M_Bake_" + n] for n in _bake_source_materials()]
+
+    def _target(img):
+        for m in mats:
+            node = m.node_tree.nodes["BakeTarget"]
+            node.image = img
+            for n in m.node_tree.nodes:
+                n.select = False
+            node.select = True
+            m.node_tree.nodes.active = node
+
+    scene.render.engine = 'CYCLES'
+    # Default ist CPU: der Metal-GPU-Bake hat Blender 5.2 reproduzierbar zum
+    # Absturz gebracht. Den Bake deshalb am besten headless in einem separaten
+    # Prozess fahren (siehe README), dann reisst ein Crash keine Session mit.
+    if device == 'GPU':
+        try:
+            prefs = bpy.context.preferences.addons["cycles"].preferences
+            prefs.compute_device_type = 'METAL'
+            for d in prefs.devices:
+                d.use = True
+            scene.cycles.device = 'GPU'
+        except Exception as exc:
+            print("GPU nicht verfuegbar, backe auf CPU:", exc)
+            scene.cycles.device = 'CPU'
+    else:
+        scene.cycles.device = 'CPU'
+
+    bake = scene.render.bake
+    bake.margin = margin_px
+    bake.margin_type = 'EXTEND'       # Dilation — gegen Insel-Bluten im Mip-Mapping
+    bake.use_selected_to_active = False
+    bake.use_clear = True
+
+    bpy.ops.object.select_all(action='DESELECT')
+    objs = bake_objects()
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+
+    scene.cycles.samples = ao_samples
+    _target(img_ao)
+    bpy.ops.object.bake(type='AO')
+
+    scene.cycles.samples = 32
+    _target(img_base)
+    bpy.ops.object.bake(type='DIFFUSE', pass_filter={'COLOR'})
+
+    for o in hidden:
+        o.hide_render = False
+
+    os.makedirs(ART_TEX_DIR, exist_ok=True)
+    paths = {}
+    for img, fname in ((img_base, "T_FuseBox_BaseColor.png"),
+                       (img_ao, "T_FuseBox_AO.png")):
+        img.filepath_raw = ART_TEX_DIR + "/" + fname
+        img.file_format = 'PNG'
+        img.save()
+        paths[img.name] = img.filepath_raw
+    return paths
+
+
+def build_atlas_material():
+    """M_FuseBox — das finale Material mit den gebackenen Maps (folgt der
+    Eigen-Asset-Konvention M_LoadSegment). Der AO-Multiply hier dient NUR der
+    Blender-Vorschau; in Unity liegt AO als eigene Map im Occlusion-Slot,
+    damit die Staerke gegen die SSAO regelbar bleibt."""
+    mat = bpy.data.materials.get("M_FuseBox") or bpy.data.materials.new("M_FuseBox")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    out.location = (600, 0)
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (350, 0)
+    bsdf.inputs["Roughness"].default_value = 0.6
+    nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
+    def _map(name, srgb):
+        img = bpy.data.images.get(name)
+        if img is None:
+            img = bpy.data.images.load(ART_TEX_DIR + "/" + name + ".png")
+            img.name = name
+        img.colorspace_settings.name = 'sRGB' if srgb else 'Non-Color'
+        return img
+
+    base = nt.nodes.new("ShaderNodeTexImage")
+    base.location = (-300, 150)
+    base.image = _map("T_FuseBox_BaseColor", srgb=True)
+    ao = nt.nodes.new("ShaderNodeTexImage")
+    ao.location = (-300, -200)
+    ao.image = _map("T_FuseBox_AO", srgb=False)
+
+    mix = nt.nodes.new("ShaderNodeMix")
+    mix.data_type = 'RGBA'
+    mix.blend_type = 'MULTIPLY'
+    mix.location = (50, 100)
+    mix.inputs["Factor"].default_value = 1.0
+    nt.links.new(base.outputs["Color"], mix.inputs["A"])
+    nt.links.new(ao.outputs["Color"], mix.inputs["B"])
+    nt.links.new(mix.outputs["Result"], bsdf.inputs["Base Color"])
+    return mat
+
+
+# ----------------------------------------------------------------- LABELS ----
+
+# Decal-Quads: uv = (u0, v0, u1, v1) im Sticker-Sheet (v von unten),
+# size = (Breite, Hoehe) in m, center = Weltpunkt 2 mm vor der Zielflaeche.
+# rot_y wird ins MESH gebacken (Sign_Warning ist um -7 Grad gedreht, das
+# Decal muss mitdrehen; Objektrotation bleibt 0 -> qa() bleibt sauber).
+# Die UV-Rechtecke sind aus dem generierten Sheet GEMESSEN (Magenta-Keying,
+# Bounding-Box je Element, 4 px Rand), nicht geschaetzt. Quad-Seitenverhaeltnis
+# = Seitenverhaeltnis des UV-Ausschnitts, sonst verzerrt der Sticker.
+LABELS = {
+    # Warndreieck mittig auf dem Warnschild — dreht die -7 Grad des Schilds mit.
+    # Achtung Sheet-Layout: Dreieck (bis x=403) und Kreis (ab x=385) ueberlappen
+    # sich im X-Band; der linke Kreis-Sliver ist deshalb im PNG geloescht, damit
+    # dieses Fenster die volle Dreieckskontur fassen kann, ohne ein Fragment
+    # des Nachbarn einzufangen.
+    "Decal_Sign": dict(center=(-0.28, -0.0825, 0.140), size=(0.171, 0.160),
+                       uv=(0.0360, 0.5280, 0.3955, 0.8640), rot_y=-7.0),
+    # Ampere-Typenschild links auf der Schaltertafel (ausserhalb des Hebel-Schwenks)
+    "Decal_Plate": dict(center=(-0.39, -0.342, 0.60), size=(0.090, 0.090),
+                        uv=(0.6611, 0.5498, 0.9639, 0.8525)),
+    # STROMLAST-Label auf der Saeulenkappe
+    "Decal_Column": dict(center=(0.36, -0.297, 1.37), size=(0.289, 0.100),
+                         uv=(0.0342, 0.2734, 0.6631, 0.4912)),
+    # Warnstreifen auf dem Saeulenfuss
+    "Decal_ColumnBase": dict(center=(0.36, -0.297, 0.08), size=(0.340, 0.070),
+                             uv=(0.0371, 0.1172, 0.6602, 0.2451)),
+    # kleiner Hinweisaufkleber (Stecker) auf der Kastenfront rechts der Tuer
+    "Decal_Housing": dict(center=(0.0775, -0.322, 0.50), size=(0.038, 0.049),
+                          uv=(0.6895, 0.1328, 0.9541, 0.4756)),
+    # Schaltnetz-Grafik auf der Nischenrueckwand (hinter dem Sichtfenster).
+    # 4 mm vor der Rueckwand; die Schnittlinie mit dem Sicherungsblock liegt
+    # unsichtbar in dessen Volumen. Eigene opake Textur, eigenes Material.
+    # UV beschneidet den strukturlosen dunklen Bildrand, damit auch aus
+    # schraegen Blickwinkeln Leitungen neben dem Sicherungsblock sichtbar sind.
+    "Decal_Niche": dict(center=(-0.21, -0.156, 0.95), size=(0.42, 0.34),
+                        uv=(0.04, 0.04, 0.96, 0.96), mat="M_FuseBox_Circuit"),
+}
+
+CIRCUIT_TEX = ART_TEX_DIR + "/T_FuseBox_Circuit.png"
+
+
+def _make_decal(name, center, size, uv_rect, rot_y_deg=0.0):
+    """Quad in der XZ-Ebene, Front nach -Y, triviale UVs auf den Sheet-Ausschnitt."""
+    import math
+    purge(name)
+    w, h = size
+    u0, v0, u1, v1 = uv_rect
+    verts = [(-w / 2, 0, -h / 2), (w / 2, 0, -h / 2),
+             (w / 2, 0, h / 2), (-w / 2, 0, h / 2)]
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata(verts, [], [(0, 1, 2, 3)])   # Normale zeigt nach -Y
+    mesh.update()
+    uv = mesh.uv_layers.new(name="UVMap")
+    for li, coord in zip(mesh.polygons[0].loop_indices,
+                         [(u0, v0), (u1, v0), (u1, v1), (u0, v1)]):
+        uv.data[li].uv = coord
+    if abs(rot_y_deg) > 1e-6:
+        mesh.transform(Matrix.Rotation(math.radians(rot_y_deg), 4, 'Y'))
+    obj = bpy.data.objects.new(name, mesh)
+    obj.location = center
+    link(obj)
+    shade_flat(obj)
+    return obj
+
+
+def build_labels_material():
+    mat = (bpy.data.materials.get("M_FuseBox_Labels")
+           or bpy.data.materials.new("M_FuseBox_Labels"))
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    out.location = (600, 0)
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (350, 0)
+    bsdf.inputs["Roughness"].default_value = 0.55
+    nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.location = (-200, 0)
+    img = bpy.data.images.get("T_FuseBox_Labels.png")
+    tex.image = img or bpy.data.images.load(LABELS_SHEET)
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+
+    # hartes Alpha-Clipping (Sticker-Kante), robust in EEVEE wie Cycles
+    clip = nt.nodes.new("ShaderNodeMath")
+    clip.operation = 'GREATER_THAN'
+    clip.location = (50, -200)
+    clip.inputs[1].default_value = 0.5
+    nt.links.new(tex.outputs["Alpha"], clip.inputs[0])
+    nt.links.new(clip.outputs[0], bsdf.inputs["Alpha"])
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = 'DITHERED'
+    return mat
+
+
+def build_circuit_material():
+    """M_FuseBox_Circuit — opake Schaltnetz-Grafik fuer die Nischenrueckwand."""
+    mat = (bpy.data.materials.get("M_FuseBox_Circuit")
+           or bpy.data.materials.new("M_FuseBox_Circuit"))
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    out.location = (600, 0)
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.location = (350, 0)
+    bsdf.inputs["Roughness"].default_value = 0.6
+    nt.links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    tex = nt.nodes.new("ShaderNodeTexImage")
+    tex.location = (-200, 0)
+    img = bpy.data.images.get("T_FuseBox_Circuit.png")
+    tex.image = img or bpy.data.images.load(CIRCUIT_TEX)
+    nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+    return mat
+
+
+def build_labels():
+    """Decal-Quads 1-2 mm vor der jeweiligen Flaeche — voellig unabhaengig
+    vom Atlas-Unwrap. Alle statisch, daher direkt unter FuseBox_Root."""
+    build_labels_material()
+    build_circuit_material()
+    root = bpy.data.objects.get("FuseBox_Root")
+    made = []
+    for name, spec in LABELS.items():
+        obj = _make_decal(name, spec["center"], spec["size"], spec["uv"],
+                          spec.get("rot_y", 0.0))
+        assign_mat(obj, spec.get("mat", "M_FuseBox_Labels"))
+        if root:
+            parent_to(obj, root)
+        made.append(name)
+    return made
+
+
 # ----------------------------------------------------------------- BUILD ----
 
 def build_plate():
@@ -489,8 +1093,81 @@ def build_box():
     return housing, door, glass
 
 
+def din_slots():
+    """X-Grenzen der DIN-Module, links nach rechts — Raster aus CONFIG gerechnet,
+    analog segment_slots(): din_count ist Parameter, kein fest verdrahteter Wert."""
+    C = CONFIG
+    n, pitch, w = C["din_count"], C["din_pitch"], C["din_module"]["w"]
+    span = (n - 1) * pitch + w
+    x0 = C["din_center_x"] - span / 2
+    return [(x0 + i * pitch, x0 + i * pitch + w) for i in range(n)]
+
+
+def build_bank():
+    """Sicherungsbank in der Nische: DIN-Schiene, Klemmenstreifen, Sammelschienen,
+    Schubstange (die sichtbare Kopplung zum Riesenhebel) und din_count Module
+    mit Kipphebeln. Die Kipphebel haengen unter dem Empty Breaker_Bank
+    (Ursprung = gemeinsame Kippachse) und schwenken beim Blowout synchron.
+    Bewusst OHNE Bevel: bei 2-6-cm-Bauteilen unsichtbar, kostet nur Tris."""
+    C = CONFIG
+
+    # Altbestand restlos weg (auch wenn din_count frueher groesser war)
+    for i in range(32):
+        purge(f"Breaker_Mod_{i:02d}")
+        purge(f"Breaker_Tog_{i:02d}")
+    old = bpy.data.objects.get("Breaker_Bank")
+    if old:
+        bpy.data.objects.remove(old, do_unlink=True)
+
+    make_box("Breaker_Rail", **C["din_rail"])
+    make_box("Breaker_Term", **C["din_term"])
+
+    slots = din_slots()
+    bus = C["din_bus"]
+    centers = [(s[0] + s[1]) / 2 for s in slots]
+    picks = [centers[0], centers[len(centers) // 2], centers[-1]][:bus["count"]]
+    make_multibox("Breaker_Bus",
+                  [dict(x0=x - bus["w"] / 2, x1=x + bus["w"] / 2,
+                        y0=bus["y0"], y1=bus["y1"], z0=bus["z0"], z1=bus["z1"])
+                   for x in picks],
+                  origin=(C["din_center_x"], bus["y0"], (bus["z0"] + bus["z1"]) / 2))
+    make_box("Breaker_Rod", **C["din_rod"])
+
+    bank = bpy.data.objects.new("Breaker_Bank", None)
+    bank.empty_display_size = 0.03
+    bank.location = C["din_bank_pivot"]
+    link(bank)
+
+    m, t = C["din_module"], C["din_toggle"]
+    y1, z0 = C["din_module_y1"], C["din_module_z0"]
+    for i, (x0, x1) in enumerate(slots):
+        make_box(f"Breaker_Mod_{i:02d}", x0=x0, x1=x1,
+                 y0=y1 - m["d"], y1=y1, z0=z0, z1=z0 + m["h"])
+        cx = (x0 + x1) / 2
+        tog = make_box(f"Breaker_Tog_{i:02d}",
+                       x0=cx - t["w"] / 2, x1=cx + t["w"] / 2,
+                       y0=t["y0"], y1=t["y1"], z0=t["z0"], z1=t["z1"])
+        parent_to(tog, bank)
+
+    root = bpy.data.objects.get("FuseBox_Root")
+    if root:
+        parent_to(bank, root)
+    return bank
+
+
+def set_bank(deg):
+    """Kipphebel-Bank. 0 = EIN, CONFIG['bank_blowout_deg'] = geflogen.
+    Rotation um die X-Achse (Kippachse der Schiene) — in Unity lokal X."""
+    import math
+    bank = bpy.data.objects.get("Breaker_Bank")
+    if bank:
+        bank.rotation_euler = (math.radians(deg), 0.0, 0.0)
+        bpy.context.view_layer.update()
+    return bank
+
+
 def build_breaker():
-    """B.2/B.3/B.4 — Sicherungsblock, Schaltertafel, Drehlager, Riesenhebel."""
+    """B.2/B.3/B.4 — Nischen-Sicherungsbank, Schaltertafel, Drehlager, Riesenhebel."""
     C = CONFIG
     # Dunkle Auskleidung der Nische: Rueckwand + vier Laibungen. Ohne sie wirkt
     # das Fenster wie ein Loch in eine hell erleuchtete Wand.
@@ -503,7 +1180,8 @@ def build_breaker():
         dict(x0=p["x0"], x1=p["x0"] + t, y0=yf, y1=-0.145, z0=p["z0"] + t, z1=p["z1"] - t),
         dict(x0=p["x1"] - t, x1=p["x1"], y0=yf, y1=-0.145, z0=p["z0"] + t, z1=p["z1"] - t),
     ], origin=(-0.21, -0.23, 0.95))
-    bevel(make_box("Breaker_Base",  **C["breaker"]),    width=0.010)
+    purge("Breaker_Base")            # roter Platzhalter-Block aus ASSET_VERSION <= 2
+    build_bank()
     bevel(make_box("Breaker_Plate", **C["lev_plate"]),  width=0.006)
     bevel(make_box("Breaker_Boss",  **C["lever_boss"]), width=0.012)
     lever = make_multibox("Breaker_Lever",
@@ -602,6 +1280,41 @@ def build_details():
     if door:
         parent_to(handle, door)
     return conduit, sign, handle
+
+
+def build_fx_anchors():
+    """FX-Ansatzpunkte als Empties unter FuseBox_Root — exportieren mit ins FBX.
+    Spart einen kompletten Re-Export, wenn spaeter Partikeleffekte dazukommen.
+    Positionen sind aus CONFIG abgeleitet, nicht hart eingetippt.
+    FX_LeverTip markiert die Hebelspitze in RUHESTELLUNG (der Hebel selbst
+    rotiert zur Laufzeit; wer die bewegte Spitze braucht, parented in Unity um)."""
+    C = CONFIG
+    rail, cap, knob = C["din_rail"], C["col_cap"], C["lever_knob"]
+    anchors = {
+        # Funken: mittig knapp vor der Kipphebel-Reihe der Sicherungsbank
+        "FX_Breaker": ((rail["x0"] + rail["x1"]) / 2,
+                       C["din_toggle"]["y0"] - 0.02,
+                       (rail["z0"] + rail["z1"]) / 2),
+        # Rauch/Statuslicht: mittig ueber der Saeulenkappe
+        "FX_ColumnTop": ((cap["x0"] + cap["x1"]) / 2,
+                         (cap["y0"] + cap["y1"]) / 2, cap["z1"] + 0.03),
+        # Hebelende (Knauf-Mitte, Ruhestellung)
+        "FX_LeverTip": ((knob["x0"] + knob["x1"]) / 2, knob["y0"],
+                        (knob["z0"] + knob["z1"]) / 2),
+    }
+    root = bpy.data.objects.get("FuseBox_Root")
+    made = []
+    for name, loc in anchors.items():
+        purge(name)
+        e = bpy.data.objects.new(name, None)
+        e.empty_display_type = 'PLAIN_AXES'
+        e.empty_display_size = 0.04
+        e.location = loc
+        link(e)
+        if root:
+            parent_to(e, root)
+        made.append(name)
+    return made
 
 
 def set_lever(deg):
@@ -794,7 +1507,7 @@ def qa():
         if o.name not in ("Breaker_Lever", "Box_Door") and any(abs(a) > 1e-6 for a in o.rotation_euler):
             issues.append(f"{o.name}: ungebackene Rotation")
 
-    for name in ("Breaker_Lever", "Box_Door"):
+    for name in ("Breaker_Lever", "Box_Door", "Breaker_Bank"):
         o = bpy.data.objects.get(name)
         if o and any(abs(a) > 1e-6 for a in o.rotation_euler):
             issues.append(f"{name}: steht nicht in Ruhestellung (vor dem Export zuruecksetzen)")

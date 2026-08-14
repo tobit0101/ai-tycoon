@@ -19,8 +19,17 @@ namespace AITycoon.Art.EditorTools
     {
         private const string TargetAssetPath = "Assets/_AITycoon/Art/Models/FuseBox.fbx";
 
-        /// <summary>Materialbibliothek, aus der die Bauteil-Materialien per Namen gezogen werden.</summary>
-        private const string MaterialLibraryFolder = "Assets/ThirdParty/nappin/OfficeEssentialsPack/Materials";
+        /// <summary>
+        /// Materialbibliotheken, aus denen die Bauteil-Materialien per Namen gezogen werden.
+        /// Seit der Textur-Stufe (ASSET_VERSION 3) traegt der Kasten eigene Materialien
+        /// (M_FuseBox, M_FuseBox_Labels, M_FuseBox_Circuit) aus dem _AITycoon-Ordner;
+        /// (Mat)Glass kommt weiterhin aus dem nappin-Pack.
+        /// </summary>
+        private static readonly string[] MaterialLibraryFolders =
+        {
+            "Assets/ThirdParty/nappin/OfficeEssentialsPack/Materials",
+            "Assets/_AITycoon/Art/Materials",
+        };
 
         // Name -> Material-Asset. Statisch, weil OnAssignMaterialModel pro Import einmal je Renderer
         // aufgerufen wird (hier 34 Mal) und der Ordner sich waehrend eines Imports nicht aendert.
@@ -33,7 +42,7 @@ namespace AITycoon.Art.EditorTools
         /// der Postprocessor inzwischen ein anderes liefert — das aeussert sich als
         /// "Importer generated inconsistent result".
         /// </summary>
-        public override uint GetVersion() => 1;
+        public override uint GetVersion() => 2;
 
         private void OnPreprocessModel()
         {
@@ -90,7 +99,7 @@ namespace AITycoon.Art.EditorTools
             // Ueber den Ordnerinhalt statt per AssetDatabase-Suchstring: die Materialnamen
             // enthalten Klammern ("(Mat)GradientGrey"), die in FindAssets-Queries als
             // Sonderzeichen interpretiert werden.
-            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { MaterialLibraryFolder }))
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", MaterialLibraryFolders))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
                 Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);

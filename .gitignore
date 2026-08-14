@@ -116,3 +116,6 @@ InitTestScene*.unity*
 # Unity-Wiederherstellungsdateien nach einem Absturz. Binaer serialisierte Szenen,
 # die Unity neben dem Projekt ablegt - reine Arbeitsstaende, kein Projektinhalt.
 *.backup
+
+# Python-Bytecode des Blender-Generators
+Art_Source/__pycache__/
