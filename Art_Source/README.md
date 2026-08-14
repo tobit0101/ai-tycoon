@@ -58,9 +58,10 @@ Rot zeigt Unity im Fehlerfall per MaterialPropertyBlock-Tint.
 In Blender zeigt die Front nach **−Y**, oben ist **+Z**. **In Unity vermessen** (Kommentar in
 `LoadPillar.SlamPhase()`): Bei FuseBox.fbx findet keine Achskonvertierung statt — die Kinder
 behalten ihre lokalen Blender-Achsen (der Instanz-Root kompensiert mit −90°/180°), nur das
-Drehvorzeichen spiegelt. Also: Hebel = **lokal X** (kippt nach vorne-unten, gleiche Achse und
-Richtung wie die Bank), Bank = **lokal X**, Tür = **lokal Z** — Vorzeichen beim ersten
-Play-Mode-Test verifizieren; Hebel und Bank teilen dasselbe Vorzeichen.
+Drehvorzeichen teils spiegelt: Der Import spiegelt die **X-Achse**, dadurch behalten
+**X-Rotationen ihr Blender-Vorzeichen** (Hebel/Bank: −135/−55 = nach vorne-unten, im Play
+Mode verifiziert), während **Y- und Z-Rotationen das Vorzeichen drehen** (Tür: Blender −75
+offen → Unity +75).
 
 ### Stil-Regeln (nicht verhandelbar)
 
@@ -172,9 +173,9 @@ zeigt in Blender `F.preview_load(0.58)`.
 
 | Teil | Ursprung | Achse (Blender) | Achse (Unity) | Ruhe | Ausschlag |
 |---|---|---|---|---|---|
-| `Breaker_Lever` | Drehpunkt der Schaltertafel | X (kippt nach vorne-unten) | lokal X (Vorzeichen wie Bank) | 0° (senkrecht = EIN) | 135° (geflogen) |
-| `Breaker_Bank` | Kippachse der DIN-Schiene | X | lokal X (Vorzeichen gespiegelt) | 0° (alle EIN) | −55° (alle geflogen) |
-| `Box_Door` | linke Scharnierkante | Z | lokal Z (Vorzeichen gespiegelt) | 0° (zu) | ca. −75° (offen) |
+| `Breaker_Lever` | Drehpunkt der Schaltertafel | X (kippt nach vorne-unten) | lokal X, gleiches Vorzeichen (−135) | 0° (senkrecht = EIN) | 135° (geflogen) |
+| `Breaker_Bank` | Kippachse der DIN-Schiene | X | lokal X, gleiches Vorzeichen (−55) | 0° (alle EIN) | −55° (alle geflogen) |
+| `Box_Door` | linke Scharnierkante | Z | lokal Z, Vorzeichen gespiegelt (+75) | 0° (zu) | ca. −75° (offen) |
 
 Der Hebelausschlag ist mit `lever_sweep_bounds()` so gewählt, dass die Hebelspitze über den
 gesamten Schwenk in der Schaltzone bleibt und nie mit Tür oder Glas kollidiert — er schwenkt

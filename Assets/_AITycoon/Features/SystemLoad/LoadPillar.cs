@@ -48,19 +48,16 @@ namespace AITycoon.Features.SystemLoad
         [SerializeField] private float criticalThreshold = 0.85f;
 
         [Header("Lever")]
-        [Tooltip("Kippwinkel um die lokale X-Achse: der Hebel kippt wie ein Messerschalter nach " +
-                 "VORNE-UNTEN aus der Wand — gleiche Achse, Richtung und Vorzeichen wie die " +
-                 "Bank-Kipphebel. Kippt er ruecklings in die Wand, Vorzeichen drehen (dann auch " +
-                 "bei der Bank).")]
-        [SerializeField] private float leverBlowoutAngle = 135f;
-        [Tooltip("Sekunden, bis die Reset-Sequenz beginnt.")]
-        [SerializeField] private float leverResetDelay = 4f;
+        [Tooltip("Kippwinkel um die lokale X-Achse: NEGATIV kippt den Hebel wie einen " +
+                 "Messerschalter nach vorne-unten aus der Wand (visuell verifiziert; +135 " +
+                 "kippte ihn in den Kasten). X-Rotationen behalten das Blender-Vorzeichen, " +
+                 "weil der FBX-Import die X-Achse spiegelt.")]
+        [SerializeField] private float leverBlowoutAngle = -135f;
 
         [Header("Blowout-Choreografie")]
-        [Tooltip("Kippwinkel der Bank um lokal X. Vorzeichen aus der Blender-Spiegelregel " +
-                 "abgeleitet (Blender -55 -> Unity +55) — beim ersten Play-Mode-Test visuell " +
-                 "verifizieren, wie beim Hebel geschehen.")]
-        [SerializeField] private float bankBlowoutAngle = 55f;
+        [Tooltip("Kippwinkel der Bank um lokal X — gleiche Achse und gleiches Vorzeichen wie " +
+                 "der Haupthebel: negativ = nach vorne-unten.")]
+        [SerializeField] private float bankBlowoutAngle = -55f;
         [Tooltip("Sekunden, die die Bank dem Haupthebel hinterherschnappt — liest sich als " +
                  "Kraftuebertragung ueber die Schubstange.")]
         [SerializeField] private float bankFollowDelay = 0.07f;
@@ -96,11 +93,17 @@ namespace AITycoon.Features.SystemLoad
 
         private Coroutine _blowoutRoutine;
 
-        // Waehrend die Sicherung fliegt, darf der Monitor die Saeule nicht wieder einfaerben.
-        // Ohne dieses Flag wuerde das naechste Sample (Poll-Intervall 1 s) die Segmente schon
-        // nach spaetestens einer Sekunde wieder aufleuchten lassen, waehrend der Hebel noch
-        // vier Sekunden unten haengt — Hebel und Saeule wuerden Widerspruechliches erzaehlen.
+        // Waehrend die Sicherung geflogen ist, darf der Monitor die Saeule nicht wieder
+        // einfaerben. Ohne dieses Flag wuerde das naechste Sample (Poll-Intervall 1 s) die
+        // Segmente wieder aufleuchten lassen, waehrend der Hebel unten haengt — Hebel und
+        // Saeule wuerden Widerspruechliches erzaehlen.
         private bool _blownOut;
+
+        /// <summary>
+        /// Steht die Sicherung auf "geflogen"? Sie bleibt in diesem Zustand, bis jemand
+        /// <see cref="ResetBreaker"/> ruft — sie macht sich NICHT von allein wieder rein.
+        /// </summary>
+        public bool IsBlownOut => _blownOut;
 
         /// <summary>
         /// Wird vom Editor-Builder direkt nach dem Erzeugen der Segmente aufgerufen.
@@ -300,10 +303,10 @@ namespace AITycoon.Features.SystemLoad
         /// Oeffentlicher Hook fuer Story-/Comedy-Events: die Sicherung "fliegt" als komplette
         /// Choreografie — Hebel knallt heraus, die Bank-Kipphebel in der Nische schnappen einen
         /// Wimpernschlag spaeter nach (Kraftuebertragung ueber die Schubstange) und werden rot
-        /// getintet, die Tuer springt auf, die Saeule wird schlagartig leer. Nach
-        /// <see cref="leverResetDelay"/> Sekunden laeuft die Umkehrung mit bewusst anderer
-        /// Dramaturgie: Tuer zu, Bank hoch, Hebel wird langsam "reingedrueckt" — Rausfliegen ist
-        /// ein Ereignis, Reinmachen eine Handlung.
+        /// getintet, die Tuer springt auf, die Saeule wird schlagartig leer.
+        /// Danach BLEIBT die Sicherung geflogen: das Wieder-Reinmachen ist eine bewusste
+        /// (Spieler-)Handlung und laeuft ueber <see cref="ResetBreaker"/> — nichts stellt sich
+        /// von allein zurueck.
         /// </summary>
         public void TriggerBlowout()
         {
@@ -311,6 +314,23 @@ namespace AITycoon.Features.SystemLoad
                 StopCoroutine(_blowoutRoutine);
 
             _blowoutRoutine = StartCoroutine(BlowoutRoutine());
+        }
+
+        /// <summary>
+        /// Die Umkehrung von <see cref="TriggerBlowout"/>, mit bewusst anderer Dramaturgie:
+        /// Tuer zu (ruhig), Bank hoch, Hebel wird langsam "reingedrueckt", dann faerbt sich die
+        /// Saeule auf den zuletzt bekannten Lastwert zurueck. Rausfliegen ist ein Ereignis,
+        /// Reinmachen eine Handlung.
+        /// </summary>
+        public void ResetBreaker()
+        {
+            if (!_blownOut)
+                return;
+
+            if (_blowoutRoutine != null)
+                StopCoroutine(_blowoutRoutine);
+
+            _blowoutRoutine = StartCoroutine(ResetRoutine());
         }
 
         private IEnumerator BlowoutRoutine()
@@ -328,8 +348,12 @@ namespace AITycoon.Features.SystemLoad
                 yield return RotateLocal(boxDoor, Quaternion.Euler(0f, 0f, doorOpenAngle),
                                          doorOpenDuration, slamCurve);
 
-            yield return new WaitForSeconds(leverResetDelay);
+            // Ende: die Sicherung bleibt geflogen, bis ResetBreaker() gerufen wird.
+            _blowoutRoutine = null;
+        }
 
+        private IEnumerator ResetRoutine()
+        {
             // Reset-Dramaturgie: erst die Tuer (ruhig), dann die Bank, zuletzt der Haupthebel.
             if (boxDoor != null)
                 yield return RotateLocal(boxDoor, Quaternion.identity, doorCloseDuration, settleCurve);
@@ -360,12 +384,13 @@ namespace AITycoon.Features.SystemLoad
         /// </summary>
         private IEnumerator SlamPhase()
         {
-            // Achsenlage: Bei FuseBox.fbx findet keine Achskonvertierung statt — die Kinder
-            // behalten ihre lokalen Blender-Achsen (der Instanz-Root kompensiert mit -90/180,
-            // siehe OfficeLayoutBuilder), nur Drehvorzeichen koennen spiegeln.
+            // Achsenlage: Die Kinder behalten ihre lokalen Blender-Achsen (der Instanz-Root
+            // kompensiert mit -90/180, siehe OfficeLayoutBuilder). Der FBX-Import spiegelt die
+            // X-ACHSE — dadurch behalten X-Rotationen ihr Blender-Vorzeichen (Hebel/Bank:
+            // negativ = nach vorne-unten, visuell verifiziert), waehrend Y- und Z-Rotationen
+            // das Vorzeichen drehen (Tuer: Blender -75 offen -> Unity +75).
             // Hebel UND Bank kippen um lokal X nach vorne-unten aus der Wand (Messerschalter-
-            // Bewegung, Design seit ASSET_VERSION 3) — bewusst dieselbe Achse und dasselbe
-            // Vorzeichen: kippt eines ruecklings in die Wand, beide Winkel im Inspector negieren.
+            // Bewegung, Design seit ASSET_VERSION 3) — dieselbe Achse, dasselbe Vorzeichen.
             Quaternion leverFrom = breakerLever != null ? breakerLever.localRotation : Quaternion.identity;
             Quaternion bankFrom = breakerBank != null ? breakerBank.localRotation : Quaternion.identity;
             Quaternion leverTo = Quaternion.Euler(leverBlowoutAngle, 0f, 0f);
@@ -452,6 +477,19 @@ namespace AITycoon.Features.SystemLoad
             else
             {
                 Debug.LogWarning("[SystemLoad] Bitte starte das Spiel, um die Sicherung testweise auszuloesen.");
+            }
+        }
+
+        [ContextMenu("Sicherung testweise reinmachen (Play Mode)")]
+        private void EditorTestReset()
+        {
+            if (Application.isPlaying)
+            {
+                ResetBreaker();
+            }
+            else
+            {
+                Debug.LogWarning("[SystemLoad] Bitte starte das Spiel, um die Sicherung testweise reinzumachen.");
             }
         }
     }

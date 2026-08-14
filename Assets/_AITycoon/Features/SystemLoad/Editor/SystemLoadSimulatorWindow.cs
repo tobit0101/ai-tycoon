@@ -326,10 +326,21 @@ namespace AITycoon.Features.SystemLoad.EditorTools
             EditorGUILayout.LabelField("Reaktion", EditorStyles.boldLabel);
 
             LoadPillar pillar = ReadPillar().Pillar;
-            using (new EditorGUI.DisabledScope(pillar == null))
+            using (new EditorGUILayout.HorizontalScope())
             {
-                if (GUILayout.Button("Sicherung ausloesen"))
-                    pillar.TriggerBlowout();
+                // Raushauen und Reinmachen sind getrennte, bewusste Handlungen — die Sicherung
+                // stellt sich nie von allein zurueck (LoadPillar.IsBlownOut haelt den Zustand).
+                using (new EditorGUI.DisabledScope(pillar == null || pillar.IsBlownOut))
+                {
+                    if (GUILayout.Button("Sicherung raushauen"))
+                        pillar.TriggerBlowout();
+                }
+
+                using (new EditorGUI.DisabledScope(pillar == null || !pillar.IsBlownOut))
+                {
+                    if (GUILayout.Button("Sicherung reinmachen"))
+                        pillar.ResetBreaker();
+                }
             }
 
             if (pillar == null)
