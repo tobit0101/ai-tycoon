@@ -165,6 +165,25 @@ namespace AITycoon.Features.SystemLoad
         /// </summary>
         private void ResolveContractBindings()
         {
+            // Auch die Segmente selbst einsammeln: ein "Reset" der Komponente im Inspector
+            // leert das Array — ohne diese Heilung bliebe die Saeule danach dauerhaft dunkel.
+            if (segments == null || segments.Length == 0)
+            {
+                Transform segmentsRoot = transform.Find("Segments");
+                if (segmentsRoot != null)
+                {
+                    var found = new List<Renderer>();
+                    foreach (Transform seg in segmentsRoot)
+                    {
+                        if (seg.TryGetComponent(out Renderer segmentRenderer))
+                            found.Add(segmentRenderer);
+                    }
+                    // Zero-Padding macht alphabetisch = numerisch (Segment_00 unten).
+                    found.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+                    segments = found.ToArray();
+                }
+            }
+
             if (breakerLever == null)
                 breakerLever = transform.Find("Breaker_Lever");
             if (boxDoor == null)

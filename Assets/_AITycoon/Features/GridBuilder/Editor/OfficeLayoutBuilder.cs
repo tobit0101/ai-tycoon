@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using AITycoon.Features.AI_Agents;
 using AITycoon.Features.SystemLoad;
+using AITycoon.Features.SystemLoad.EditorTools;
 using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -30,7 +31,6 @@ namespace AITycoon.Features.GridBuilder
         private const string Nappin = "Assets/ThirdParty/nappin/OfficeEssentialsPack/Prefabs/";
         private const string Plants = "Assets/ThirdParty/Level13/Low Poly Interior Flower Pots/URP/Prefab/";
 
-        private const string SegmentMaterialPath = "Assets/_AITycoon/Art/Materials/M_LoadSegment.mat";
 
         /// <summary>Ein Moebel/Deko-Stueck auf einer Grid-Zelle. Yaw in Grad, Offset in Weltmetern.</summary>
         private struct PropSpec
@@ -369,18 +369,20 @@ namespace AITycoon.Features.GridBuilder
         // ------------------------------------------------------------------ Sicherung + Lastsaeule
 
         /// <summary>
-        /// Weltobjekt-Haelfte der Denklast (Konzept §2.3). Instanziiert das echte Blender-Modell
-        /// FuseBox.fbx (Art/Models) — der fruehe Primitive-Platzhalter ist damit ueberfluessig.
-        /// Position: Nordwand direkt hinter der Denk-Station, damit Engpass und Anzeige im selben
-        /// Kamerabild liegen. Das ist die Lesbarkeits-Anforderung, nicht Deko.
+        /// Weltobjekt-Haelfte der Denklast (Konzept §2.3). Instanziiert das spielfertige
+        /// FuseBox-Prefab — ein Variant des Blender-Modells, den die FuseBoxPrefabFactory
+        /// frisch aus dem FBX ableitet (Achskompensation, LoadPillar-Verdrahtung,
+        /// Segment-Material). Position: Nordwand direkt hinter der Denk-Station, damit
+        /// Engpass und Anzeige im selben Kamerabild liegen — Lesbarkeit, nicht Deko.
         /// </summary>
         private static void BuildFuseBox(Transform parent)
         {
-            GameObject prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/_AITycoon/Art/Models/FuseBox.fbx");
+            // Immer frisch ableiten: so kann das Prefab nie hinter dem FBX-Stand herhinken.
+            GameObject prefab = FuseBoxPrefabFactory.CreateOrUpdate();
             if (prefab == null)
             {
-                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx nicht gefunden unter " +
-                                 "Assets/_AITycoon/Art/Models/ — Sicherungskasten wird uebersprungen.");
+                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox-Prefab konnte nicht erzeugt " +
+                                 "werden — Sicherungskasten wird uebersprungen.");
                 return;
             }
 
@@ -392,102 +394,8 @@ namespace AITycoon.Features.GridBuilder
                 cell.x,
                 OfficeGrid.FuseBoxMountHeight,
                 cell.z - OfficeGrid.WallThickness * 0.5f);
-            // Zwei Drehungen in einer, Reihenfolge beachten — Quaternion.Euler(x, y, z) wendet
-            // Z, dann X, dann Y an, hier also erst die -90 um X und danach die 180 um Y:
-            //
-            // 1) -90 um X gleicht die Achsen des FBX aus. Der Header von FuseBox.fbx meldet
-            //    UpAxis = 1 (Y) und FrontAxis = 2 (Z), also exakt Unitys System — Unity konvertiert
-            //    daraufhin nichts. Die Geometrie liegt aber in rohen Blender-Achsen (Z = oben):
-            //    gemessen 1.16 x 1.45 x 0.425 auf X/Z/Y statt auf X/Y/Z, der Kasten liegt also
-            //    flach. Die Kompensation gehoert bewusst auf den Root der Instanz und nicht in den
-            //    Import: so behalten alle Kinder ihre lokale Identitaets-Rotation, worauf sich
-            //    LoadPillar beim Zuruecksetzen des Hebels verlaesst.
-            //    Sobald die Blender-Quelle unter Art_Source/ korrekt Y-up exportiert, faellt hier
-            //    nur die -90 weg.
-            // 2) 180 um Y, weil das Modell nach +Z schaut, der Raum von der Nordwand aus aber
-            //    in -Z liegt. Nicht "korrigieren": sonst blickt der Sicherungskasten in die Wand.
-            holder.transform.rotation = Quaternion.Euler(-90f, 180f, 0f);
-            holder.transform.localScale = Vector3.one;
-
-            LoadPillar pillar = holder.AddComponent<LoadPillar>();
-
-            // Segmente dynamisch einsammeln statt hart zu codieren: Segment_00 … Segment_11 sind
-            // per Zero-Padding alphabetisch = numerisch sortiert (unten nach oben).
-            Transform segmentsRoot = holder.transform.Find("Segments");
-            if (segmentsRoot == null || segmentsRoot.childCount == 0)
-            {
-                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: Kind 'Segments' fehlt oder " +
-                                 "ist leer — Lastsaeule bleibt ohne Segmente.");
-            }
-            else
-            {
-                Transform[] ordered = segmentsRoot.Cast<Transform>()
-                    .OrderBy(t => t.name, System.StringComparer.Ordinal)
-                    .ToArray();
-
-                List<Renderer> segments = new List<Renderer>(ordered.Length);
-                foreach (Transform seg in ordered)
-                {
-                    Renderer r = seg.GetComponent<Renderer>();
-                    if (r == null)
-                    {
-                        Debug.LogWarning($"[OfficeLayoutBuilder] FuseBox.fbx: Segment '{seg.name}' " +
-                                         "hat keinen Renderer — uebersprungen.");
-                        continue;
-                    }
-                    segments.Add(r);
-                }
-
-                if (segments.Count == 0)
-                {
-                    Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: keine gueltigen " +
-                                     "Segment-Renderer unter 'Segments' gefunden.");
-                }
-                else
-                {
-                    // Gemeinsames Material statt der drei FBX-Bandfarben: LoadPillar faerbt zur
-                    // Laufzeit ohnehin per MaterialPropertyBlock um, ein geteiltes Material haelt
-                    // dabei alle Segmente in einem Batch.
-                    Material segMat = GetOrCreateSegmentMaterial();
-                    foreach (Renderer r in segments)
-                        r.sharedMaterial = segMat;
-
-                    pillar.AssignSegments(segments.ToArray());
-                }
-            }
-
-            Transform lever = holder.transform.Find("Breaker_Lever");
-            if (lever == null)
-                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Breaker_Lever' nicht " +
-                                 "gefunden — Hebel bleibt unanimiert.");
-            pillar.AssignLever(lever);
-
-            Transform door = holder.transform.Find("Box_Door");
-            if (door == null)
-                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Box_Door' nicht " +
-                                 "gefunden — Tuer bleibt beim Blowout zu.");
-            pillar.AssignDoor(door);
-
-            // Kipphebel-Bank in der Nische (seit ASSET_VERSION 3): das Empty kippt beim Blowout,
-            // die Kipphebel-Renderer werden dabei rot getintet. Beides optional — aeltere
-            // FBX-Staende ohne Bank loggen nur eine Warnung.
-            Transform bank = holder.transform.Find("Breaker_Bank");
-            if (bank == null)
-            {
-                Debug.LogWarning("[OfficeLayoutBuilder] FuseBox.fbx: 'Breaker_Bank' nicht " +
-                                 "gefunden — Nischen-Kipphebel bleiben unanimiert.");
-                pillar.AssignBank(null, null);
-            }
-            else
-            {
-                Renderer[] toggles = bank.Cast<Transform>()
-                    .Where(t => t.name.StartsWith("Breaker_Tog_", System.StringComparison.Ordinal))
-                    .OrderBy(t => t.name, System.StringComparer.Ordinal)
-                    .Select(t => t.GetComponent<Renderer>())
-                    .Where(r => r != null)
-                    .ToArray();
-                pillar.AssignBank(bank, toggles);
-            }
+            // Rotation und Scale kommen aus dem Prefab — die Achskompensation (-90/180) liegt
+            // in der FuseBoxPrefabFactory. Hier wird nur platziert, nichts korrigiert.
 
             // Kein BoxCollider hier: BakeNavMesh() sammelt ueber CollectObjects.Children +
             // NavMeshCollectGeometry.RenderMeshes ausschliesslich Render-Meshes fuer den Bake
@@ -498,47 +406,6 @@ namespace AITycoon.Features.GridBuilder
             // statt eines zu raten.
         }
 
-        /// <summary>
-        /// Basismaterial der Lastsaeule. Bewusst dunkel: weisse Segmente lesen aus der Iso-Perspektive
-        /// als Jalousie, nicht als Instrument. Die Farbe setzt zur Laufzeit <see cref="LoadPillar"/>.
-        /// </summary>
-        private static Material GetOrCreateSegmentMaterial()
-        {
-            Color unlit = new Color(0.16f, 0.17f, 0.19f);
-
-            Material existing = AssetDatabase.LoadAssetAtPath<Material>(SegmentMaterialPath);
-            if (existing != null)
-            {
-                ApplyColor(existing, unlit);
-                // MaterialPropertyBlock (das LoadPillar fuer die Laufzeit-Einfaerbung nutzt) kann
-                // Shader-Keywords nicht setzen — das _EMISSION-Keyword muss deshalb einmalig am
-                // geteilten Material aktiviert sein, sonst bleibt die Emission-Farbe wirkungslos,
-                // egal was LoadPillar per PropertyBlock setzt.
-                existing.EnableKeyword("_EMISSION");
-                existing.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                return existing;
-            }
-
-            if (!AssetDatabase.IsValidFolder("Assets/_AITycoon/Art/Materials"))
-                AssetDatabase.CreateFolder("Assets/_AITycoon/Art", "Materials");
-
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            Material mat = new Material(shader) { name = "M_LoadSegment" };
-            ApplyColor(mat, unlit);
-            mat.EnableKeyword("_EMISSION");
-            mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-
-            AssetDatabase.CreateAsset(mat, SegmentMaterialPath);
-            AssetDatabase.SaveAssets();
-            return mat;
-        }
-
-        private static void ApplyColor(Material mat, Color color)
-        {
-            mat.color = color;
-            if (mat.HasProperty("_BaseColor"))
-                mat.SetColor("_BaseColor", color);
-        }
 
         // ------------------------------------------------------------------ Bestand einpassen
 
