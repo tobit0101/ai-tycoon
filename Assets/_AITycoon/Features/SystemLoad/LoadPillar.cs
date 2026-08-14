@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace AITycoon.Features.SystemLoad
@@ -68,10 +69,12 @@ namespace AITycoon.Features.SystemLoad
         [SerializeField] private float doorCloseDuration = 0.6f;
         [Tooltip("Dauer des Zurueckdrueckens von Bank und Hebel — bewusst langsamer als der Schlag.")]
         [SerializeField] private float leverResetDuration = 0.8f;
-        [Tooltip("Easing fuers Rausfliegen. Werte ueber 1 ergeben den Ueberschwinger.")]
+        [Tooltip("Easing fuers Rausfliegen. Werte ueber 1 ergeben den Ueberschwinger. " +
+                 "Peak bewusst klein halten: bei 135 Grad Grundwinkel bedeutet 1.04 schon " +
+                 "+5 Grad ueber den in Blender geprueften Schwenkbereich hinaus.")]
         [SerializeField] private AnimationCurve slamCurve = new AnimationCurve(
-            new Keyframe(0f, 0f, 0f, 3.2f),
-            new Keyframe(0.7f, 1.08f),
+            new Keyframe(0f, 0f, 0f, 2.2f),
+            new Keyframe(0.75f, 1.04f),
             new Keyframe(1f, 1f));
         [Tooltip("Easing fuers Zuruecksetzen — ruhig, ohne Ueberschwinger.")]
         [SerializeField] private AnimationCurve settleCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
@@ -139,6 +142,40 @@ namespace AITycoon.Features.SystemLoad
         {
             if (monitor == null)
                 monitor = FindAnyObjectByType<SystemLoadMonitor>(FindObjectsInactive.Exclude);
+
+            ResolveContractBindings();
+        }
+
+        /// <summary>
+        /// Selbstheilung ueber die Vertragsnamen der FBX-Hierarchie (siehe Art_Source/README.md):
+        /// alles, was der OfficeLayoutBuilder nicht zugewiesen hat — etwa weil die Szenen-Instanz
+        /// aelter ist als das jeweilige Feature — wird hier nachgebunden. Ohne das bliebe eine
+        /// Teilanimation einfach stumm: die Tuer "geht nicht auf", ohne dass irgendwo ein
+        /// Fehler stuende. Explizite Builder-Zuweisungen haben weiter Vorrang (nur null-Felder
+        /// werden befuellt).
+        /// </summary>
+        private void ResolveContractBindings()
+        {
+            if (breakerLever == null)
+                breakerLever = transform.Find("Breaker_Lever");
+            if (boxDoor == null)
+                boxDoor = transform.Find("Box_Door");
+            if (breakerBank == null)
+                breakerBank = transform.Find("Breaker_Bank");
+
+            if (breakerBank != null && (bankToggles == null || bankToggles.Length == 0))
+            {
+                var toggles = new List<Renderer>();
+                foreach (Transform child in breakerBank)
+                {
+                    if (child.name.StartsWith("Breaker_Tog_", System.StringComparison.Ordinal)
+                        && child.TryGetComponent(out Renderer toggleRenderer))
+                    {
+                        toggles.Add(toggleRenderer);
+                    }
+                }
+                bankToggles = toggles.ToArray();
+            }
         }
 
         private void OnEnable()
